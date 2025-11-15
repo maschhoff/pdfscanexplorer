@@ -288,8 +288,10 @@
     function updatePreview(index) {
       const row = $table.find('tbody tr').eq(index);
       var fileName = row.children('td').eq(0).text();
-      var tmp="{{ sugg_filename }}.pdf"
+      var tmp="{{ sugg_filename }}"
+      console.log(tmp);
       let fileNameX = tmp || row.children('td').eq(0).text();
+      console.log(fileNameX);
 
       // Update PDF viewer iframe src
       const pdfUrl = '/static/pdfjs/web/viewer.html?file=/static/pdf/unknown/' + encodeURIComponent(fileName);

@@ -125,12 +125,15 @@
         </button>
       </div>
       <div class="modal-body">
+        <form action="/upload" name="uploadForm" method="POST"></form>
         <label class="form-label" for="customFile">Choose file to upload</label>
         <input type="file" class="form-control" id="customFile" />
+         <button type="submit" class="btn btn-primary btn-sm" data-dismiss="modal">Upload</button>
+        </form>
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary btn-sm" data-dismiss="modal">Close</button>
-        <button type="button" id="btnConfirmDelete" class="btn btn-primary btn-sm">Upload</button>
+     
       </div>
     </div>
   </div>
