@@ -336,6 +336,7 @@ def upload_file():
         }), 200
     else:
         return jsonify({"error": "Dateityp nicht erlaubt."}), 400
+    doautoscan()
 
 # Subdirectories list & HTML generation for folder tree
 subdirs = [archiv_dir]
