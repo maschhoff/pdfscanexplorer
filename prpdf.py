@@ -329,14 +329,17 @@ def upload_file():
     if file and allowed_file(file.filename):
         filepath = os.path.join(pdf_dir, file.filename)
         file.save(filepath)
+        doautoscan()
+        """
         return jsonify({
             "message": "Datei erfolgreich hochgeladen.",
             "filename": file.filename,
             "path": filepath
         }), 200
+        """
     else:
         return jsonify({"error": "Dateityp nicht erlaubt."}), 400
-    doautoscan()
+    
 
 # Subdirectories list & HTML generation for folder tree
 subdirs = [archiv_dir]
