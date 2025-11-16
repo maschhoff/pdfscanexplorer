@@ -382,6 +382,7 @@
     // Button: AI triggers server route with filename
     $('#btnAI').on('click', function () {
       const fileName = $table.find('tbody tr').eq(selectedIndex).children('td').eq(0).text();
+      $("#load").LoadingOverlay("show");
       window.location.href = "/ai/" + encodeURIComponent(fileName);
     });
 
