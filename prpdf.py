@@ -159,7 +159,7 @@ def aisug(id):
         return render_template('explorer.html', liste=pdf, preview=id, message=result, subdirhtml=subdirhtml, folders=loadArchivFolder(), iterator=0, selected_folder=result["Ordner"], sugg_filename=result["Datei"])
     except Exception as e:
         logging.error(f"An exception occurred in AI {e}")
-        return render_template('explorer.html', liste=pdf, preview=id, message=f"Error {e}"., subdirhtml=subdirhtml, folders=loadArchivFolder(), iterator=0, selected_folder=result["Ordner"], sugg_filename=result["Datei"])
+        return render_template('explorer.html', liste=pdf, preview=id, message=f"Error {e}", subdirhtml=subdirhtml, folders=loadArchivFolder(), iterator=0, selected_folder=result["Ordner"], sugg_filename=result["Datei"])
     
 # Trigger autoscan manually
 @app.route('/autoscan')
