@@ -1,3 +1,14 @@
+## [v1.0.1] - 2025-11-16 / 📦 Changelog – New Features & Improvements
+
+### New Features
+
+- Upload a file manually in the WebUI
+  Click the + sign to start
+  Endpoint /upload
+- OpenAI API Integration for Filename and Folder suggestion.
+  Enable by setting the "openai_api_key in the config file / settings
+  Endpoint /ai
+
 ## [v1.0.0] - 2025-07-25 / 📦 Changelog – New Features & Improvements
 
 ### New Features
