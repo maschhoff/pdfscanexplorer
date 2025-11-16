@@ -15,6 +15,7 @@ This program is very new and theres a lot to test. Please report issues to the i
 ## Functions:
 * PDF OCR Autoscan will move known documents based on keywords
 * Preview and Rename documents from a web browser
+* AI based suggestion of Filename and Folder
 * PDF Merge let you merge documents (1+1 and front and back pages)
 * Split documents 
 * Manual rename and move
