@@ -22,7 +22,7 @@ def extract_text_from_pdf(path: str, max_chars: int = 15000) -> str:
 
 def categorize_document(file_path: str, ordner_liste: list[str]):
     if(API_KEY==""):
-        return "Kein API Key vorhanden!"
+        raise ValueError("Kein API Key vorhanden!")
     pdf_text = extract_text_from_pdf(file_path)
     if not pdf_text.strip():
         raise ValueError("Keine extrahierbaren Textinhalte in der PDF.")

@@ -153,10 +153,14 @@ def dosplitpost():
 # Try AI to get folder and filename
 @app.route('/ai/<string:id>')
 def aisug(id):
-    result=ai.categorize_document(unknown_dir+id,loadArchivFolder())
     pdf = loadFiles()
-    return render_template('explorer.html', liste=pdf, preview=id, message=result, subdirhtml=subdirhtml, folders=loadArchivFolder(), iterator=0, selected_folder=result["Ordner"], sugg_filename=result["Datei"])
-
+    try:
+        result=ai.categorize_document(unknown_dir+id,loadArchivFolder())
+        return render_template('explorer.html', liste=pdf, preview=id, message=result, subdirhtml=subdirhtml, folders=loadArchivFolder(), iterator=0, selected_folder=result["Ordner"], sugg_filename=result["Datei"])
+    except Exception as e:
+        logging.error(f"An exception occurred in AI {e}")
+        return render_template('explorer.html', liste=pdf, preview=id, message=f"Error {e}"., subdirhtml=subdirhtml, folders=loadArchivFolder(), iterator=0, selected_folder=result["Ordner"], sugg_filename=result["Datei"])
+    
 # Trigger autoscan manually
 @app.route('/autoscan')
 def doautoscan():
