@@ -333,7 +333,7 @@ def upload_file():
     if file and allowed_file(file.filename):
         filepath = os.path.join(pdf_dir, file.filename)
         file.save(filepath)
-        doautoscan()
+        return redirect('/autoscan')
         """
         return jsonify({
             "message": "Datei erfolgreich hochgeladen.",
