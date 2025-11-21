@@ -1,13 +1,13 @@
-# PR PDF - scan documents explorer and automation 
-Preview and Rename PDF Explorer  
-A webbased document explorer and automation. For easy view, rename and move scanned PDF files.
+# PDF Scan Explorer - scan documents explorer and automation 
+Preview and Rename Scan PDF Explorer  
+A webbased document PDF explorer and automation. For easy view, rename and move scanned PDF files with the help of AI (if you want) 
   
 ## Background and Motivation:  
 I was searching for a easy to use solution to get my letters and paper digital.  
 Since I was searching for a solution for my unraid NAS, solutions like paperwork dont work as docker/in web or on many computer.  
 Programs like Paperless and Papermerge are great but much to heavy with database etc.  
 I like to keep my files in a normal folder structure to share and access them from every pc.  
-Thats how PR PDF started. As an lightwight easy to use web based application to make it easy to preview, rename and move scanned documents.  
+Thats how PDF Scan Explorer started. As an lightwight easy to use web based application to make it easy to preview, rename and move scanned documents.  
   
 ## BETA Note:  
 This program is very new and theres a lot to test. Please report issues to the issues tab on github.
