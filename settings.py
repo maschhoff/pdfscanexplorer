@@ -29,6 +29,18 @@ def loadConfig():
             "enable_update_flag": true,
             "force_ocr": false,
             "openai_api_key":"",
+            "imap": {
+                "enabled": false,
+                "host": "",
+                "port": 993,
+                "ssl": true,
+                "username": "",
+                "password": "",
+                "folder": "INBOX",
+                "processed_folder": "Processed",
+                "delete_after_import": false,
+                "scan_interval": 300
+            },
             "index": {
                 "Foldername/Filename": ["Keyword1"],
                 "Foldername2/Filename": ["Keyword1", "Keyword2", "Keyword3"]

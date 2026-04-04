@@ -5,9 +5,10 @@ import json
 import logging
 from datetime import datetime, date
 from logging.handlers import TimedRotatingFileHandler
-from flask import Flask, render_template, request, redirect, jsonify, session
+from flask import Flask, render_template, request, redirect, jsonify, session, send_file
 import settings
 import autoscan
+import imap_scanner
 import merge
 import splitpages
 import status
@@ -344,6 +345,77 @@ def upload_file():
     else:
         return jsonify({"error": "Dateityp nicht erlaubt."}), 400
     
+
+# File Explorer: browse archive folders
+@app.route('/fileexplorer')
+def fileexplorer():
+    return render_template('fileexplorer.html', subdirhtml=subdirhtml)
+
+
+# File Explorer: list PDFs in a given archive folder (AJAX endpoint)
+@app.route('/api/files')
+def api_files():
+    folder = request.args.get('folder', '')
+    if not folder:
+        return jsonify([])
+
+    real_archiv = os.path.realpath(archiv_dir)
+    real_folder = os.path.realpath(folder)
+
+    if not real_folder.startswith(real_archiv):
+        return jsonify({'error': 'Access denied'}), 403
+
+    if not os.path.isdir(real_folder):
+        return jsonify([])
+
+    rel_base = os.path.relpath(real_folder, real_archiv)
+
+    result = []
+    for fname in sorted(os.listdir(real_folder)):
+        if fname.lower().endswith('.pdf') and os.path.isfile(os.path.join(real_folder, fname)):
+            fpath = os.path.join(real_folder, fname)
+            rel_path = os.path.join(rel_base, fname) if rel_base != '.' else fname
+            result.append({
+                'name': fname,
+                'size': f'{os.path.getsize(fpath) / 1_000_000:.2f} MB',
+                'date': datetime.fromtimestamp(os.path.getmtime(fpath)).strftime('%Y-%m-%d %H:%M:%S'),
+                'url': '/archive/' + rel_path.replace(os.sep, '/'),
+            })
+    return jsonify(result)
+
+
+# Serve archive PDF files for preview
+@app.route('/archive/<path:filepath>')
+def serve_archive_file(filepath):
+    real_archiv = os.path.realpath(archiv_dir)
+    safe_path = os.path.realpath(os.path.join(archiv_dir, filepath))
+    if not safe_path.startswith(real_archiv):
+        return 'Access denied', 403
+    if not os.path.isfile(safe_path):
+        return 'File not found', 404
+    return send_file(safe_path, mimetype='application/pdf')
+
+
+# Trigger IMAP scan manually
+@app.route('/imap_scan')
+def do_imap_scan():
+    try:
+        count = imap_scanner.scan_imap()
+        msg = f"IMAP scan complete: {count} PDF(s) imported."
+    except Exception as e:
+        logging.error(f"IMAP scan error: {e}")
+        msg = f"IMAP scan error: {e}"
+
+    global subdirhtml
+    subdirhtml = ""
+    listdirs(archiv_dir)
+
+    pdf = loadFiles()
+    search = pdf[0] if pdf else {"name": ""}
+    return render_template('explorer.html', liste=pdf, preview=search['name'],
+                           subdirhtml=subdirhtml, folders=loadArchivFolder(),
+                           iterator=0, message=msg)
+
 
 # Subdirectories list & HTML generation for folder tree
 subdirs = [archiv_dir]

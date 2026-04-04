@@ -86,6 +86,16 @@
             ></a>
           </li>
           <li class="nav-item">
+            <a class="nav-link" href="/imap_scan" id="button_imap" data-toggle="tooltip" data-placement="bottom" title="Scan IMAP mailbox for PDF attachments">
+              <i class="fas fa-envelope-open-text"></i>
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="/fileexplorer" data-toggle="tooltip" data-placement="bottom" title="Browse archive">
+              <i class="fas fa-archive"></i>
+            </a>
+          </li>
+          <li class="nav-item">
             <a class="nav-link" href="/merge" data-toggle="tooltip" data-placement="bottom" title="Merge files">
               <i class="fas fa-caret-square-down"></i>
             </a>
@@ -154,6 +164,10 @@
   <script>
     // Show loading overlay when autoscan button is clicked
     document.getElementById("button_autoscan").onclick = function () {
+      $("#load").LoadingOverlay("show");
+    };
+    // Show loading overlay when IMAP scan button is clicked
+    document.getElementById("button_imap").onclick = function () {
       $("#load").LoadingOverlay("show");
     };
   </script>

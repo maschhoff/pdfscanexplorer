@@ -1,0 +1,175 @@
+{% extends "layout.html" %}
+{% block content %}
+<div class="container-fluid">
+  <div class="row"><br/></div>
+  <div class="row">
+
+    <!-- Left panel: folder tree -->
+    <div class="col-3" style="border-right: 1px solid #dee2e6; max-height: calc(100vh - 80px); overflow-y: auto;">
+      <h5 class="mb-3"><i class="fas fa-archive mr-2"></i>Archive</h5>
+      <div class="treeview">
+        <ul class="mb-1 pl-2 pb-2" style="list-style:none; padding-left:0;">
+          <li>
+            <span>
+              <i class="far fa-folder-open ic-w mx-1"></i>
+              <a href="javascript:void(0)" onclick="browsefolder('/Archiv/');">/ Root</a>
+            </span>
+          </li>
+          <hr class="my-1">
+          {{ subdirhtml|safe }}
+        </ul>
+      </div>
+    </div>
+
+    <!-- Center panel: file list -->
+    <div class="col-3" style="border-right: 1px solid #dee2e6; max-height: calc(100vh - 80px); overflow-y: auto;">
+      <h5 class="mb-1" id="currentFolderLabel"><span class="text-muted">No folder selected</span></h5>
+      <small id="fileCount" class="text-muted d-block mb-2"></small>
+      <div id="fileListContainer">
+        <p class="text-muted mt-3">Click a folder in the tree to browse its contents.</p>
+      </div>
+    </div>
+
+    <!-- Right panel: PDF preview -->
+    <div class="col-6" id="previewPanel">
+      <div id="previewPlaceholder" class="text-center text-muted mt-5">
+        <i class="fas fa-file-pdf fa-4x mb-3" style="opacity:0.2;"></i>
+        <p>Select a file to preview it here.</p>
+      </div>
+      <div id="previewContent" style="display:none;">
+        <div class="d-flex align-items-center mb-2">
+          <span id="previewFileName" class="font-weight-bold mr-auto text-truncate" style="max-width:70%;"></span>
+          <a id="btnDownload" href="#" class="btn btn-primary btn-sm ml-2" download>
+            <i class="fas fa-download"></i>
+          </a>
+        </div>
+        <iframe id="pdfViewerFrame"
+          src=""
+          width="100%"
+          height="800px"
+          frameborder="0"
+          style="border: none;">
+        </iframe>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  var currentFolder = '';
+
+  /**
+   * Called by the folder tree links (reuses subdirhtml onclick="selectfolder(...)").
+   * We alias it so the shared tree HTML works without changes.
+   */
+  function selectfolder(folderPath) {
+    browsefolder(folderPath);
+  }
+
+  /**
+   * Load files for the selected folder via AJAX and render the file list.
+   */
+  function browsefolder(folderPath) {
+    currentFolder = folderPath;
+
+    var label = document.getElementById('currentFolderLabel');
+    label.innerHTML = '<i class="fas fa-folder-open mr-1 text-warning"></i>' +
+      '<span class="text-truncate">' + escapeHtml(folderPath) + '</span>';
+
+    document.getElementById('fileCount').textContent = 'Loading\u2026';
+    document.getElementById('fileListContainer').innerHTML =
+      '<p class="text-muted"><i class="fas fa-spinner fa-spin mr-1"></i> Loading\u2026</p>';
+
+    fetch('/api/files?folder=' + encodeURIComponent(folderPath))
+      .then(function(r) { return r.json(); })
+      .then(function(files) {
+        renderFileList(files);
+      })
+      .catch(function(e) {
+        document.getElementById('fileListContainer').innerHTML =
+          '<p class="text-danger">Error loading files: ' + escapeHtml(String(e)) + '</p>';
+        document.getElementById('fileCount').textContent = '';
+        console.error('Error:', e);
+      });
+  }
+
+  /**
+   * Render the file list table inside the center panel.
+   */
+  function renderFileList(files) {
+    var countEl = document.getElementById('fileCount');
+    var container = document.getElementById('fileListContainer');
+
+    if (!files || files.length === 0) {
+      countEl.textContent = 'No PDF files in this folder.';
+      container.innerHTML = '<p class="text-muted mt-2"><i class="fas fa-inbox mr-1"></i> Empty folder.</p>';
+      return;
+    }
+
+    countEl.textContent = files.length + ' file' + (files.length !== 1 ? 's' : '');
+
+    var rows = files.map(function(f) {
+      return '<tr class="fe-file-row" data-url="' + escapeAttr(f.url) +
+        '" data-name="' + escapeAttr(f.name) + '" style="cursor:pointer;">' +
+        '<td style="word-break:break-all; font-size:0.85em;">' + escapeHtml(f.name) + '</td>' +
+        '<td class="text-nowrap text-muted" style="font-size:0.8em;">' + escapeHtml(f.size) + '</td>' +
+        '<td class="text-nowrap text-muted" style="font-size:0.8em;">' + escapeHtml(f.date) + '</td>' +
+        '</tr>';
+    });
+
+    container.innerHTML =
+      '<table class="table table-hover table-sm mb-0" id="feFilesTable">' +
+        '<thead><tr>' +
+          '<th style="font-size:0.8em;">Name</th>' +
+          '<th style="font-size:0.8em;">Size</th>' +
+          '<th style="font-size:0.8em;">Date</th>' +
+        '</tr></thead>' +
+        '<tbody>' + rows.join('') + '</tbody>' +
+      '</table>';
+
+    // Attach click handlers
+    document.querySelectorAll('.fe-file-row').forEach(function(row) {
+      row.addEventListener('click', function() {
+        document.querySelectorAll('.fe-file-row').forEach(function(r) {
+          r.classList.remove('table-active');
+        });
+        this.classList.add('table-active');
+        previewFile(this.dataset.url, this.dataset.name);
+      });
+    });
+  }
+
+  /**
+   * Show the PDF preview panel for the given file URL.
+   */
+  function previewFile(fileUrl, fileName) {
+    document.getElementById('previewPlaceholder').style.display = 'none';
+    document.getElementById('previewContent').style.display = '';
+    document.getElementById('previewFileName').textContent = fileName;
+
+    var viewerUrl = '/static/pdfjs/web/viewer.html?file=' + encodeURIComponent(fileUrl);
+    document.getElementById('pdfViewerFrame').src = viewerUrl;
+    document.getElementById('btnDownload').href = fileUrl;
+  }
+
+  /** HTML-escape a string for safe insertion into text nodes. */
+  function escapeHtml(str) {
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  /** Escape for use in HTML attribute values. */
+  function escapeAttr(str) {
+    return String(str).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
+  $(document).ready(function() {
+    $('.treeview').mdbTreeview();
+    $('[data-toggle="tooltip"]').tooltip();
+  });
+</script>
+{% endblock %}
