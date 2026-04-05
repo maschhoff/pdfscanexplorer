@@ -14,16 +14,6 @@
     <input type="hidden" name="hiddenconfig" id="hiddenconfig" />
 
     <!-- Tab Navigation -->
-    <!-- QR Code for mobile scan page -->
-  <div class="card mb-4" style="max-width: 340px;">
-    <div class="card-header"><i class="fas fa-qrcode mr-1"></i> Mobile Scan</div>
-    <div class="card-body text-center">
-      <p class="text-muted small mb-3">Scanne den QR-Code mit deinem Smartphone um direkt ein Dokument zu fotografieren und hochzuladen.</p>
-      <div id="qrcode" class="d-inline-block mb-2"></div>
-      <p class="text-muted small mt-2" id="scan-url-label" style="word-break:break-all;"></p>
-    </div>
-  </div>
-
   <ul class="nav nav-tabs mb-3" id="settingsTabs" role="tablist">
       <li class="nav-item">
         <a class="nav-link active" id="tab-general" data-toggle="tab" href="#pane-general" role="tab">
@@ -38,6 +28,11 @@
       <li class="nav-item">
         <a class="nav-link" id="tab-imap" data-toggle="tab" href="#pane-imap" role="tab">
           <i class="fas fa-envelope-open-text mr-1"></i> IMAP
+        </a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" id="tab-mobile" data-toggle="tab" href="#pane-mobile" role="tab">
+          <i class="fas fa-qrcode mr-1"></i> Mobile Scan
         </a>
       </li>
       <li class="nav-item">
@@ -303,6 +298,30 @@
         </div>
       </div>
 
+      <!-- MOBILE SCAN -->
+      <div class="tab-pane fade" id="pane-mobile" role="tabpanel">
+        <div class="row">
+          <div class="col-md-5">
+            <div class="card mb-3">
+              <div class="card-header"><i class="fas fa-qrcode mr-1"></i> Mobile Scanner</div>
+              <div class="card-body text-center">
+                <p class="text-muted small mb-3">
+                  Scanne den QR-Code mit deinem Smartphone, um Dokumente direkt zu fotografieren und hochzuladen.
+                </p>
+                <div id="qrcode" class="d-inline-block mb-3"></div>
+                <p class="small mb-2" id="scan-url-label" style="word-break:break-all;"></p>
+                <div id="qr-https-warning" class="alert alert-warning small text-left mt-2" style="display:none;">
+                  <i class="fas fa-exclamation-triangle mr-1"></i>
+                  <strong>Hinweis:</strong> Der Kamerazugriff im Browser erfordert <strong>HTTPS</strong>.
+                  Wenn du über HTTP zugreifst, wird die Kamera auf dem Smartphone blockiert.
+                  Richte einen HTTPS-Reverse-Proxy (z.B. nginx) ein oder nutze ein selbstsigniertes Zertifikat.
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- JSON (Advanced) -->
       <div class="tab-pane fade" id="pane-advanced" role="tabpanel">
         <p class="text-muted small mb-2">Direct JSON editor – changes here override the form fields above on save.</p>
@@ -409,6 +428,10 @@
       colorLight: '#ffffff',
       correctLevel: QRCode.CorrectLevel.M
     });
+    // Show HTTPS warning if served over plain HTTP
+    if (window.location.protocol !== 'https:') {
+      document.getElementById('qr-https-warning').style.display = '';
+    }
   })();
 </script>
 

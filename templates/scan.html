@@ -302,6 +302,17 @@
   // ── camera ────────────────────────────────────────────────────────────────
   async function startCamera() {
     if (stream) { stream.getTracks().forEach(t => t.stop()); }
+
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      showCameraError(
+        'Kein Kamerazugriff möglich.',
+        window.location.protocol === 'http:'
+          ? 'Browser erlauben Kamerazugriff nur über HTTPS. Bitte richte HTTPS ein (z.B. nginx Reverse-Proxy) und öffne die Seite über https://…'
+          : 'Dein Browser unterstützt die Kamera-API nicht oder der Zugriff wurde verweigert.'
+      );
+      return;
+    }
+
     try {
       stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode, width: { ideal: 1920 }, height: { ideal: 1080 } },
@@ -311,8 +322,21 @@
       video.play();
       video.addEventListener('loadedmetadata', startDetectionLoop, { once: true });
     } catch (e) {
-      alert('Kamera konnte nicht gestartet werden: ' + e.message);
+      let hint = '';
+      if (e.name === 'NotAllowedError') hint = 'Kameraberechtigung wurde verweigert. Bitte in den Browser-Einstellungen erlauben.';
+      else if (e.name === 'NotFoundError') hint = 'Keine Kamera gefunden.';
+      else if (window.location.protocol === 'http:') hint = 'Kamerazugriff erfordert HTTPS. Seite über https://… öffnen.';
+      showCameraError('Kamera konnte nicht gestartet werden.', hint || e.message);
     }
+  }
+
+  function showCameraError(title, detail) {
+    var wrap = document.getElementById('viewfinder-wrap');
+    wrap.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;padding:24px;text-align:center;gap:16px;">'
+      + '<div style="font-size:3rem;">📷</div>'
+      + '<strong style="color:#fff;">' + title + '</strong>'
+      + (detail ? '<p style="color:rgba(255,255,255,0.6);font-size:0.85rem;max-width:320px;">' + detail + '</p>' : '')
+      + '</div>';
   }
 
   document.getElementById('btn-flip-camera').addEventListener('click', () => {
