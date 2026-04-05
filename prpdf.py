@@ -162,6 +162,27 @@ def aisug(id):
         logging.error(f"An exception occurred in AI {e}")
         return render_template('explorer.html', liste=pdf, preview=id, message=f"Error {e}", subdirhtml=subdirhtml, folders=loadArchivFolder(), iterator=0)
     
+# Mobile scan page
+@app.route('/scan')
+def mobile_scan():
+    return render_template('scan.html')
+
+
+# Mobile upload endpoint – returns JSON instead of redirecting
+@app.route('/upload_mobile', methods=['POST'])
+def upload_mobile():
+    if 'file' not in request.files:
+        return jsonify({'success': False, 'error': 'No file in request'}), 400
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({'success': False, 'error': 'No file selected'}), 400
+    if file and allowed_file(file.filename):
+        filepath = os.path.join(pdf_dir, file.filename)
+        file.save(filepath)
+        return jsonify({'success': True, 'filename': file.filename})
+    return jsonify({'success': False, 'error': 'File type not allowed'}), 400
+
+
 # Trigger autoscan manually
 @app.route('/autoscan')
 def doautoscan():

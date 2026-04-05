@@ -14,7 +14,17 @@
     <input type="hidden" name="hiddenconfig" id="hiddenconfig" />
 
     <!-- Tab Navigation -->
-    <ul class="nav nav-tabs mb-3" id="settingsTabs" role="tablist">
+    <!-- QR Code for mobile scan page -->
+  <div class="card mb-4" style="max-width: 340px;">
+    <div class="card-header"><i class="fas fa-qrcode mr-1"></i> Mobile Scan</div>
+    <div class="card-body text-center">
+      <p class="text-muted small mb-3">Scanne den QR-Code mit deinem Smartphone um direkt ein Dokument zu fotografieren und hochzuladen.</p>
+      <div id="qrcode" class="d-inline-block mb-2"></div>
+      <p class="text-muted small mt-2" id="scan-url-label" style="word-break:break-all;"></p>
+    </div>
+  </div>
+
+  <ul class="nav nav-tabs mb-3" id="settingsTabs" role="tablist">
       <li class="nav-item">
         <a class="nav-link active" id="tab-general" data-toggle="tab" href="#pane-general" role="tab">
           <i class="fas fa-sliders-h mr-1"></i> General
@@ -383,6 +393,23 @@
 
   // Initialize hidden input value
   document.getElementById('hiddenconfig').value = editor.getValue();
+</script>
+
+<!-- QR Code library -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script>
+  (function() {
+    var scanUrl = window.location.origin + '/scan';
+    document.getElementById('scan-url-label').textContent = scanUrl;
+    new QRCode(document.getElementById('qrcode'), {
+      text: scanUrl,
+      width: 200,
+      height: 200,
+      colorDark: '#000000',
+      colorLight: '#ffffff',
+      correctLevel: QRCode.CorrectLevel.M
+    });
+  })();
 </script>
 
 {% endblock content %}

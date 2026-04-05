@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>PDF Scan</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --accent: #2196F3;
+      --accent-dark: #1565C0;
+      --danger: #e53935;
+      --success: #43a047;
+      --bg: #121212;
+      --surface: #1e1e1e;
+      --surface2: #2c2c2c;
+      --text: #f0f0f0;
+      --text-muted: #999;
+      --radius: 14px;
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      overflow: hidden;
+    }
+
+    /* ── screens ── */
+    .screen { display: none; flex-direction: column; height: 100dvh; }
+    .screen.active { display: flex; }
+
+    /* ── header ── */
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 16px 10px;
+      background: var(--surface);
+      flex-shrink: 0;
+    }
+    .topbar h1 { font-size: 1.1rem; font-weight: 600; }
+    .topbar .icon-btn {
+      background: none; border: none; color: var(--text-muted);
+      font-size: 1.4rem; cursor: pointer; padding: 4px;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    /* ── viewfinder ── */
+    #viewfinder-wrap {
+      position: relative;
+      flex: 1;
+      overflow: hidden;
+      background: #000;
+    }
+    #video {
+      width: 100%; height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    #overlay-canvas {
+      position: absolute; top: 0; left: 0;
+      width: 100%; height: 100%;
+      pointer-events: none;
+    }
+    .corner-guide {
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      width: min(80vw, 320px);
+      aspect-ratio: 0.707;
+      pointer-events: none;
+    }
+    .corner-guide::before, .corner-guide::after,
+    .corner-guide span::before, .corner-guide span::after {
+      content: '';
+      position: absolute;
+      width: 24px; height: 24px;
+      border-color: rgba(255,255,255,0.7);
+      border-style: solid;
+    }
+    .corner-guide::before  { top:0; left:0;   border-width: 3px 0 0 3px; }
+    .corner-guide::after   { top:0; right:0;  border-width: 3px 3px 0 0; }
+    .corner-guide span::before { bottom:0; left:0;  border-width: 0 0 3px 3px; }
+    .corner-guide span::after  { bottom:0; right:0; border-width: 0 3px 3px 0; }
+
+    .hint-text {
+      position: absolute; bottom: 16px; left: 0; right: 0;
+      text-align: center;
+      color: rgba(255,255,255,0.7);
+      font-size: 0.85rem;
+      text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+    }
+
+    /* ── capture bar ── */
+    .capture-bar {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px 24px;
+      background: var(--surface);
+      gap: 32px;
+      flex-shrink: 0;
+    }
+    .shutter {
+      width: 72px; height: 72px;
+      border-radius: 50%;
+      background: #fff;
+      border: 5px solid rgba(255,255,255,0.3);
+      cursor: pointer;
+      flex-shrink: 0;
+      -webkit-tap-highlight-color: transparent;
+      transition: transform 0.1s, background 0.1s;
+    }
+    .shutter:active { transform: scale(0.93); background: #ddd; }
+    .side-btn {
+      background: var(--surface2); border: none; border-radius: 50%;
+      color: var(--text); width: 48px; height: 48px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.3rem; cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    /* ── result screen ── */
+    #result-wrap {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    #result-canvas {
+      width: 100%;
+      border-radius: var(--radius);
+      box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+      display: block;
+    }
+    .result-bar {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      padding: 0 0 24px;
+      flex-shrink: 0;
+    }
+    .btn {
+      width: 100%;
+      padding: 15px;
+      border: none; border-radius: var(--radius);
+      font-size: 1rem; font-weight: 600;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      transition: opacity 0.15s;
+    }
+    .btn:active { opacity: 0.8; }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-secondary { background: var(--surface2); color: var(--text); }
+    .btn-danger { background: var(--danger); color: #fff; }
+
+    /* ── upload status overlay ── */
+    #upload-overlay {
+      display: none;
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.85);
+      z-index: 100;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 20px;
+    }
+    #upload-overlay.active { display: flex; }
+    .spinner {
+      width: 52px; height: 52px;
+      border: 5px solid rgba(255,255,255,0.15);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    #upload-overlay p { font-size: 1rem; color: var(--text-muted); }
+    .status-icon { font-size: 3rem; }
+
+    /* ── loading opencv ── */
+    #loading-screen {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      height: 100dvh;
+      background: var(--bg);
+    }
+    #loading-screen p { color: var(--text-muted); font-size: 0.9rem; }
+    #loading-progress { color: var(--accent); font-weight: 600; }
+  </style>
+</head>
+<body>
+
+<!-- Loading screen while OpenCV initialises -->
+<div id="loading-screen">
+  <div class="spinner"></div>
+  <p>Lade Scan-Engine…</p>
+  <p id="loading-progress"></p>
+</div>
+
+<!-- ══ CAMERA SCREEN ══════════════════════════════════════════════════════════ -->
+<div class="screen" id="screen-camera">
+  <div class="topbar">
+    <span></span>
+    <h1>📄 Dokument scannen</h1>
+    <button class="icon-btn" id="btn-flip-camera" title="Kamera wechseln">⇄</button>
+  </div>
+
+  <div id="viewfinder-wrap">
+    <video id="video" playsinline autoplay muted></video>
+    <canvas id="overlay-canvas"></canvas>
+    <div class="corner-guide"><span></span></div>
+    <p class="hint-text">Dokument im Rahmen positionieren</p>
+  </div>
+
+  <div class="capture-bar">
+    <div style="width:48px;"></div>
+    <button class="shutter" id="btn-capture" title="Foto aufnehmen"></button>
+    <div style="width:48px;"></div>
+  </div>
+</div>
+
+<!-- ══ RESULT SCREEN ══════════════════════════════════════════════════════════ -->
+<div class="screen" id="screen-result">
+  <div class="topbar">
+    <button class="icon-btn" id="btn-back" title="Zurück">←</button>
+    <h1>Ergebnis</h1>
+    <span style="width:32px;"></span>
+  </div>
+
+  <div id="result-wrap">
+    <canvas id="result-canvas"></canvas>
+  </div>
+
+  <div class="result-bar" style="padding: 0 16px 24px;">
+    <button class="btn btn-primary" id="btn-upload">
+      ☁ Als PDF hochladen
+    </button>
+    <button class="btn btn-secondary" id="btn-rescan">
+      ↺ Erneut scannen
+    </button>
+  </div>
+</div>
+
+<!-- Upload overlay -->
+<div id="upload-overlay">
+  <div id="overlay-spinner" class="spinner"></div>
+  <div id="overlay-icon" class="status-icon" style="display:none;"></div>
+  <p id="overlay-msg">Wird hochgeladen…</p>
+</div>
+
+<!-- ── Libraries ──────────────────────────────────────────────────────────── -->
+<!-- OpenCV.js bundled with jscanify to ensure version compatibility -->
+<script async src="https://cdn.jsdelivr.net/npm/jscanify@1.4.2/src/opencv.js"
+  onload="onOpenCvReady()" onerror="cvLoadError()"></script>
+<script src="https://cdn.jsdelivr.net/npm/jscanify@1.4.2/src/jscanify.js"></script>
+<!-- jsPDF for PDF generation -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+<script>
+  // ── state ────────────────────────────────────────────────────────────────
+  let scanner = null;
+  let stream = null;
+  let facingMode = 'environment';
+  let detectionLoop = null;
+  let scannedCanvas = null; // result of extractPaper
+
+  const video        = document.getElementById('video');
+  const overlayCanvas = document.getElementById('overlay-canvas');
+  const overlayCtx   = overlayCanvas.getContext('2d');
+  const resultCanvas  = document.getElementById('result-canvas');
+  const loadingScreen = document.getElementById('loading-screen');
+  const loadingProgress = document.getElementById('loading-progress');
+
+  // ── OpenCV ready ──────────────────────────────────────────────────────────
+  function onOpenCvReady() {
+    // cv may still be loading – wait for it
+    if (typeof cv === 'undefined' || cv.getBuildInformation === undefined) {
+      setTimeout(onOpenCvReady, 200);
+      return;
+    }
+    scanner = new jscanify();
+    loadingScreen.style.display = 'none';
+    showScreen('screen-camera');
+    startCamera();
+  }
+
+  function cvLoadError() {
+    loadingProgress.textContent = 'Fehler beim Laden der Scan-Engine.';
+  }
+
+  // ── camera ────────────────────────────────────────────────────────────────
+  async function startCamera() {
+    if (stream) { stream.getTracks().forEach(t => t.stop()); }
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode, width: { ideal: 1920 }, height: { ideal: 1080 } },
+        audio: false
+      });
+      video.srcObject = stream;
+      video.play();
+      video.addEventListener('loadedmetadata', startDetectionLoop, { once: true });
+    } catch (e) {
+      alert('Kamera konnte nicht gestartet werden: ' + e.message);
+    }
+  }
+
+  document.getElementById('btn-flip-camera').addEventListener('click', () => {
+    facingMode = facingMode === 'environment' ? 'user' : 'environment';
+    stopDetectionLoop();
+    startCamera();
+  });
+
+  // ── document detection overlay ───────────────────────────────────────────
+  function startDetectionLoop() {
+    stopDetectionLoop();
+    detectionLoop = requestAnimationFrame(detectFrame);
+  }
+
+  function stopDetectionLoop() {
+    if (detectionLoop) { cancelAnimationFrame(detectionLoop); detectionLoop = null; }
+  }
+
+  function detectFrame() {
+    if (video.readyState < 2) { detectionLoop = requestAnimationFrame(detectFrame); return; }
+
+    overlayCanvas.width  = video.videoWidth;
+    overlayCanvas.height = video.videoHeight;
+
+    try {
+      // highlightPaper draws contour on a canvas and returns it
+      const highlighted = scanner.highlightPaper(video);
+      overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+      overlayCtx.drawImage(highlighted, 0, 0, overlayCanvas.width, overlayCanvas.height);
+    } catch (_) {
+      overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+    }
+
+    detectionLoop = requestAnimationFrame(detectFrame);
+  }
+
+  // ── capture ───────────────────────────────────────────────────────────────
+  document.getElementById('btn-capture').addEventListener('click', () => {
+    stopDetectionLoop();
+
+    // Grab current video frame to a temp canvas
+    const tempCanvas = document.createElement('canvas');
+    tempCanvas.width  = video.videoWidth;
+    tempCanvas.height = video.videoHeight;
+    tempCanvas.getContext('2d').drawImage(video, 0, 0);
+
+    // Extract document perspective
+    try {
+      scannedCanvas = scanner.extractPaper(tempCanvas, tempCanvas.width, tempCanvas.height);
+    } catch (e) {
+      console.warn('extractPaper failed, using raw capture:', e);
+      scannedCanvas = tempCanvas;
+    }
+
+    // Show result screen
+    const ctx = resultCanvas.getContext('2d');
+    resultCanvas.width  = scannedCanvas.width;
+    resultCanvas.height = scannedCanvas.height;
+    ctx.drawImage(scannedCanvas, 0, 0);
+
+    showScreen('screen-result');
+  });
+
+  // ── result navigation ─────────────────────────────────────────────────────
+  document.getElementById('btn-back').addEventListener('click', goBackToCamera);
+  document.getElementById('btn-rescan').addEventListener('click', goBackToCamera);
+
+  function goBackToCamera() {
+    showScreen('screen-camera');
+    startDetectionLoop();
+  }
+
+  // ── PDF generation & upload ───────────────────────────────────────────────
+  document.getElementById('btn-upload').addEventListener('click', async () => {
+    showUploadOverlay('loading', 'PDF wird erstellt…');
+
+    try {
+      const pdfBlob = await canvasToPdfBlob(resultCanvas);
+      showUploadOverlay('loading', 'Wird hochgeladen…');
+
+      const filename = 'scan_' + new Date().toISOString().replace(/[:.]/g, '-') + '.pdf';
+      const form = new FormData();
+      form.append('file', pdfBlob, filename);
+
+      const resp = await fetch('/upload_mobile', { method: 'POST', body: form });
+      const data = await resp.json();
+
+      if (data.success) {
+        showUploadOverlay('success', '✅ Erfolgreich hochgeladen!');
+        setTimeout(() => {
+          hideUploadOverlay();
+          goBackToCamera();
+        }, 2000);
+      } else {
+        showUploadOverlay('error', '❌ Fehler: ' + (data.error || 'Unbekannt'));
+        setTimeout(hideUploadOverlay, 3000);
+      }
+    } catch (e) {
+      showUploadOverlay('error', '❌ ' + e.message);
+      setTimeout(hideUploadOverlay, 3000);
+    }
+  });
+
+  function canvasToPdfBlob(canvas) {
+    return new Promise((resolve) => {
+      const { jsPDF } = window.jspdf;
+      const imgData = canvas.toDataURL('image/jpeg', 0.92);
+
+      // Fit canvas proportions into A4
+      const mmW = 210, mmH = 297;
+      const ratio = canvas.width / canvas.height;
+      let pdfW = mmW, pdfH = mmW / ratio;
+      if (pdfH > mmH) { pdfH = mmH; pdfW = mmH * ratio; }
+      const offX = (mmW - pdfW) / 2;
+      const offY = (mmH - pdfH) / 2;
+
+      const doc = new jsPDF({ orientation: pdfH > pdfW ? 'p' : 'l', unit: 'mm', format: 'a4' });
+      doc.addImage(imgData, 'JPEG', offX, offY, pdfW, pdfH);
+      resolve(doc.output('blob'));
+    });
+  }
+
+  // ── upload overlay helpers ────────────────────────────────────────────────
+  function showUploadOverlay(type, msg) {
+    const overlay  = document.getElementById('upload-overlay');
+    const spinner  = document.getElementById('overlay-spinner');
+    const icon     = document.getElementById('overlay-icon');
+    const msgEl    = document.getElementById('overlay-msg');
+
+    msgEl.textContent = msg;
+    if (type === 'loading') {
+      spinner.style.display = ''; icon.style.display = 'none';
+    } else {
+      spinner.style.display = 'none';
+      icon.style.display = '';
+      icon.textContent = type === 'success' ? '✅' : '❌';
+    }
+    overlay.classList.add('active');
+  }
+
+  function hideUploadOverlay() {
+    document.getElementById('upload-overlay').classList.remove('active');
+  }
+
+  // ── screen switcher ───────────────────────────────────────────────────────
+  function showScreen(id) {
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+  }
+</script>
+</body>
+</html>
