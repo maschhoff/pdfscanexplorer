@@ -1,58 +1,388 @@
 {% extends "layout.html" %}
 {% block content %}
 
-<div style="position: absolute; top: 60px; left: 5px; right: 5px;">
+<div class="container-fluid mt-4">
+
+  {% if message %}
+  <div class="alert alert-{% if 'error' in message.lower() or 'json' in message.lower() %}danger{% else %}success{% endif %} alert-dismissible fade show" role="alert">
+    {{ message }}
+    <button type="button" class="close" data-dismiss="alert"><span>&times;</span></button>
+  </div>
+  {% endif %}
+
   <form name="config" action="/settings" method="POST" id="configForm">
     <input type="hidden" name="hiddenconfig" id="hiddenconfig" />
-    <button type="submit" class="btn btn-primary mt-3">
-      <ion-icon name="save"></ion-icon> Save
-    </button>
+
+    <!-- Tab Navigation -->
+    <ul class="nav nav-tabs mb-3" id="settingsTabs" role="tablist">
+      <li class="nav-item">
+        <a class="nav-link active" id="tab-general" data-toggle="tab" href="#pane-general" role="tab">
+          <i class="fas fa-sliders-h mr-1"></i> General
+        </a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" id="tab-ocr" data-toggle="tab" href="#pane-ocr" role="tab">
+          <i class="fas fa-file-alt mr-1"></i> OCR
+        </a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" id="tab-imap" data-toggle="tab" href="#pane-imap" role="tab">
+          <i class="fas fa-envelope-open-text mr-1"></i> IMAP
+        </a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" id="tab-advanced" data-toggle="tab" href="#pane-advanced" role="tab">
+          <i class="fas fa-code mr-1"></i> JSON
+        </a>
+      </li>
+    </ul>
+
+    <!-- Tab Panes -->
+    <div class="tab-content">
+
+      <!-- GENERAL -->
+      <div class="tab-pane fade show active" id="pane-general" role="tabpanel">
+        <div class="row">
+          <div class="col-md-6">
+
+            <div class="card mb-3">
+              <div class="card-header"><i class="fas fa-server mr-1"></i> Server</div>
+              <div class="card-body">
+                <div class="form-group row">
+                  <label class="col-sm-4 col-form-label">Port</label>
+                  <div class="col-sm-8">
+                    <input type="number" class="form-control" id="f_port" value="{{ config.port | default(80) }}">
+                  </div>
+                </div>
+                <div class="form-group row mb-0">
+                  <label class="col-sm-4 col-form-label">Debug</label>
+                  <div class="col-sm-8 d-flex align-items-center">
+                    <div class="custom-control custom-switch">
+                      <input type="checkbox" class="custom-control-input" id="f_debug" {% if config.debug == 'on' %}checked{% endif %}>
+                      <label class="custom-control-label" for="f_debug">Enabled</label>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="card mb-3">
+              <div class="card-header"><i class="fas fa-sort-amount-up mr-1"></i> Sorting</div>
+              <div class="card-body">
+                <div class="form-group row">
+                  <label class="col-sm-5 col-form-label">Scan interval (s)</label>
+                  <div class="col-sm-7">
+                    <input type="number" class="form-control" id="f_updatetime" value="{{ config.updatetime | default(1800) }}">
+                    <small class="form-text text-muted">Autoscan interval in seconds (e.g. 1800 = 30 min)</small>
+                  </div>
+                </div>
+                <div class="form-group row">
+                  <label class="col-sm-5 col-form-label">Append date</label>
+                  <div class="col-sm-7 d-flex align-items-center">
+                    <div class="custom-control custom-switch">
+                      <input type="checkbox" class="custom-control-input" id="f_append_date" {% if config.append_date %}checked{% endif %}>
+                      <label class="custom-control-label" for="f_append_date">Add scan date to filename</label>
+                    </div>
+                  </div>
+                </div>
+                <div class="form-group row">
+                  <label class="col-sm-5 col-form-label">Append random</label>
+                  <div class="col-sm-7 d-flex align-items-center">
+                    <div class="custom-control custom-switch">
+                      <input type="checkbox" class="custom-control-input" id="f_append_random" {% if config.append_random %}checked{% endif %}>
+                      <label class="custom-control-label" for="f_append_random">Add random suffix to filename</label>
+                    </div>
+                  </div>
+                </div>
+                <div class="form-group row mb-0">
+                  <label class="col-sm-5 col-form-label">Update flag</label>
+                  <div class="col-sm-7 d-flex align-items-center">
+                    <div class="custom-control custom-switch">
+                      <input type="checkbox" class="custom-control-input" id="f_enable_update_flag" {% if config.enable_update_flag %}checked{% endif %}>
+                      <label class="custom-control-label" for="f_enable_update_flag">Notify frontend after scan</label>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+          <div class="col-md-6">
+
+            <div class="card mb-3">
+              <div class="card-header"><i class="fas fa-magic mr-1"></i> AI Integration</div>
+              <div class="card-body">
+                <div class="form-group row mb-0">
+                  <label class="col-sm-4 col-form-label">OpenAI API Key</label>
+                  <div class="col-sm-8">
+                    <input type="password" class="form-control" id="f_openai_api_key" value="{{ config.openai_api_key | default('') }}" autocomplete="new-password">
+                    <small class="form-text text-muted">Required for AI folder/filename suggestions</small>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+      <!-- OCR -->
+      <div class="tab-pane fade" id="pane-ocr" role="tabpanel">
+        <div class="row">
+          <div class="col-md-6">
+            <div class="card mb-3">
+              <div class="card-header"><i class="fas fa-eye mr-1"></i> OCR Options</div>
+              <div class="card-body">
+                <div class="form-group row">
+                  <label class="col-sm-4 col-form-label">Language</label>
+                  <div class="col-sm-8">
+                    <input type="text" class="form-control" id="f_lang" value="{{ config.lang | default('deu') }}">
+                    <small class="form-text text-muted">Tesseract language code, e.g. <code>deu</code>, <code>eng</code></small>
+                  </div>
+                </div>
+                <div class="form-group row">
+                  <label class="col-sm-4 col-form-label">OCR mode</label>
+                  <div class="col-sm-8">
+                    <select class="form-control" id="f_ocr_mode">
+                      <option value="skip_text" {% if config.ocr_options and config.ocr_options.ocr_mode == 'skip_text' %}selected{% endif %}>skip_text – OCR only pages without text</option>
+                      <option value="force_ocr" {% if config.ocr_options and config.ocr_options.ocr_mode == 'force_ocr' %}selected{% endif %}>force_ocr – always run OCR</option>
+                      <option value="redo_ocr" {% if config.ocr_options and config.ocr_options.ocr_mode == 'redo_ocr' %}selected{% endif %}>redo_ocr – replace existing OCR layer</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="form-group row">
+                  <label class="col-sm-4 col-form-label">Force OCR</label>
+                  <div class="col-sm-8 d-flex align-items-center">
+                    <div class="custom-control custom-switch">
+                      <input type="checkbox" class="custom-control-input" id="f_force_ocr" {% if config.force_ocr %}checked{% endif %}>
+                      <label class="custom-control-label" for="f_force_ocr">Force OCR globally</label>
+                    </div>
+                  </div>
+                </div>
+                <div class="form-group row">
+                  <label class="col-sm-4 col-form-label">Rotate pages</label>
+                  <div class="col-sm-8 d-flex align-items-center">
+                    <div class="custom-control custom-switch">
+                      <input type="checkbox" class="custom-control-input" id="f_rotate_pages" {% if config.ocr_options and config.ocr_options.rotate_pages %}checked{% endif %}>
+                      <label class="custom-control-label" for="f_rotate_pages">Auto-rotate pages</label>
+                    </div>
+                  </div>
+                </div>
+                <div class="form-group row">
+                  <label class="col-sm-4 col-form-label">Deskew</label>
+                  <div class="col-sm-8 d-flex align-items-center">
+                    <div class="custom-control custom-switch">
+                      <input type="checkbox" class="custom-control-input" id="f_deskew" {% if config.ocr_options and config.ocr_options.deskew %}checked{% endif %}>
+                      <label class="custom-control-label" for="f_deskew">Correct skewed scans</label>
+                    </div>
+                  </div>
+                </div>
+                <div class="form-group row">
+                  <label class="col-sm-4 col-form-label">Optimize</label>
+                  <div class="col-sm-8">
+                    <select class="form-control" id="f_optimize">
+                      <option value="0" {% if config.ocr_options and config.ocr_options.optimize == 0 %}selected{% endif %}>0 – No optimization</option>
+                      <option value="1" {% if config.ocr_options and config.ocr_options.optimize == 1 %}selected{% endif %}>1 – Safe lossless</option>
+                      <option value="2" {% if config.ocr_options and config.ocr_options.optimize == 2 %}selected{% endif %}>2 – Moderate compression</option>
+                      <option value="3" {% if config.ocr_options and config.ocr_options.optimize == 3 %}selected{% endif %}>3 – Aggressive compression</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="form-group row mb-0">
+                  <label class="col-sm-4 col-form-label">Jobs</label>
+                  <div class="col-sm-8">
+                    <input type="number" class="form-control" id="f_jobs" min="1" max="32" value="{{ config.ocr_options.jobs | default(3) if config.ocr_options else 3 }}">
+                    <small class="form-text text-muted">Number of parallel OCR workers</small>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- IMAP -->
+      <div class="tab-pane fade" id="pane-imap" role="tabpanel">
+        <div class="row">
+          <div class="col-md-6">
+            <div class="card mb-3">
+              <div class="card-header"><i class="fas fa-envelope mr-1"></i> IMAP Connection</div>
+              <div class="card-body">
+                <div class="form-group row">
+                  <label class="col-sm-4 col-form-label">Enable IMAP scan</label>
+                  <div class="col-sm-8 d-flex align-items-center">
+                    <div class="custom-control custom-switch">
+                      <input type="checkbox" class="custom-control-input" id="f_imap_enabled" {% if config.imap and config.imap.enabled %}checked{% endif %}>
+                      <label class="custom-control-label" for="f_imap_enabled">Activate mailbox scanning</label>
+                    </div>
+                  </div>
+                </div>
+                <div class="form-group row">
+                  <label class="col-sm-4 col-form-label">Host</label>
+                  <div class="col-sm-8">
+                    <input type="text" class="form-control" id="f_imap_host" placeholder="imap.example.com" value="{{ config.imap.host | default('') if config.imap else '' }}">
+                  </div>
+                </div>
+                <div class="form-group row">
+                  <label class="col-sm-4 col-form-label">Port</label>
+                  <div class="col-sm-8">
+                    <input type="number" class="form-control" id="f_imap_port" value="{{ config.imap.port | default(993) if config.imap else 993 }}">
+                  </div>
+                </div>
+                <div class="form-group row">
+                  <label class="col-sm-4 col-form-label">SSL</label>
+                  <div class="col-sm-8 d-flex align-items-center">
+                    <div class="custom-control custom-switch">
+                      <input type="checkbox" class="custom-control-input" id="f_imap_ssl" {% if not config.imap or config.imap.ssl != false %}checked{% endif %}>
+                      <label class="custom-control-label" for="f_imap_ssl">Use SSL/TLS (IMAP4_SSL)</label>
+                    </div>
+                  </div>
+                </div>
+                <div class="form-group row">
+                  <label class="col-sm-4 col-form-label">Username</label>
+                  <div class="col-sm-8">
+                    <input type="text" class="form-control" id="f_imap_username" placeholder="user@example.com" value="{{ config.imap.username | default('') if config.imap else '' }}" autocomplete="off">
+                  </div>
+                </div>
+                <div class="form-group row mb-0">
+                  <label class="col-sm-4 col-form-label">Password</label>
+                  <div class="col-sm-8">
+                    <input type="password" class="form-control" id="f_imap_password" value="{{ config.imap.password | default('') if config.imap else '' }}" autocomplete="new-password">
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="col-md-6">
+            <div class="card mb-3">
+              <div class="card-header"><i class="fas fa-folder-open mr-1"></i> Mailbox Behavior</div>
+              <div class="card-body">
+                <div class="form-group row">
+                  <label class="col-sm-5 col-form-label">Inbox folder</label>
+                  <div class="col-sm-7">
+                    <input type="text" class="form-control" id="f_imap_folder" value="{{ config.imap.folder | default('INBOX') if config.imap else 'INBOX' }}">
+                    <small class="form-text text-muted">IMAP folder to scan for new emails</small>
+                  </div>
+                </div>
+                <div class="form-group row">
+                  <label class="col-sm-5 col-form-label">Processed folder</label>
+                  <div class="col-sm-7">
+                    <input type="text" class="form-control" id="f_imap_processed_folder" value="{{ config.imap.processed_folder | default('Processed') if config.imap else 'Processed' }}">
+                    <small class="form-text text-muted">Move processed emails here (leave empty to skip)</small>
+                  </div>
+                </div>
+                <div class="form-group row">
+                  <label class="col-sm-5 col-form-label">Delete after import</label>
+                  <div class="col-sm-7 d-flex align-items-center">
+                    <div class="custom-control custom-switch">
+                      <input type="checkbox" class="custom-control-input" id="f_imap_delete_after" {% if config.imap and config.imap.delete_after_import %}checked{% endif %}>
+                      <label class="custom-control-label" for="f_imap_delete_after">Delete email after PDF import</label>
+                    </div>
+                  </div>
+                </div>
+                <div class="form-group row mb-0">
+                  <label class="col-sm-5 col-form-label">Scan interval (s)</label>
+                  <div class="col-sm-7">
+                    <input type="number" class="form-control" id="f_imap_scan_interval" value="{{ config.imap.scan_interval | default(300) if config.imap else 300 }}">
+                    <small class="form-text text-muted">How often to poll the mailbox (seconds)</small>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- JSON (Advanced) -->
+      <div class="tab-pane fade" id="pane-advanced" role="tabpanel">
+        <p class="text-muted small mb-2">Direct JSON editor – changes here override the form fields above on save.</p>
+        <div id="editor" style="height: 600px; border: 1px solid #dee2e6; border-radius: 4px;"></div>
+      </div>
+
+    </div><!-- /.tab-content -->
+
+    <div class="mt-3 mb-4">
+      <button type="submit" class="btn btn-primary" id="btnSave">
+        <i class="fas fa-save mr-1"></i> Save
+      </button>
+    </div>
+
   </form>
 </div>
 
-<div id="editor"></div>
-
 <script>
-  // Parse the raw JSON string passed from backend
+  // ── ACE Editor ───────────────────────────────────────────────────────────────
   const rawJsonStr = {{ config_raw | tojson | safe }};
-
   let prettyConfig = '';
   try {
-    // Parse and pretty-print the JSON
-    const parsedJson = JSON.parse(rawJsonStr);
-    prettyConfig = JSON.stringify(parsedJson, null, 2);
+    prettyConfig = JSON.stringify(JSON.parse(rawJsonStr), null, 2);
   } catch (e) {
-    // If invalid JSON, display raw with comment
     prettyConfig = '// Invalid JSON:\n' + rawJsonStr;
   }
 
-  // Initialize ACE editor
   const editor = ace.edit("editor");
   editor.session.setMode("ace/mode/json");
   editor.setTheme("ace/theme/xcode");
   editor.setValue(prettyConfig, -1);
 
-  // Reference to hidden input to submit JSON string
-  const hiddenInput = document.getElementById("hiddenconfig");
-  hiddenInput.value = editor.getValue();
+  // ── Read form fields → build config object ──────────────────────────────────
+  function formToConfig() {
+    let base = {};
+    try { base = JSON.parse(editor.getValue()); } catch(e) { base = {}; }
 
-  // Update hidden input on every editor change
-  editor.getSession().on("change", function () {
-    hiddenInput.value = editor.getValue();
-  });
+    base.port              = parseInt(document.getElementById('f_port').value) || 80;
+    base.debug             = document.getElementById('f_debug').checked ? 'on' : 'off';
+    base.lang              = document.getElementById('f_lang').value.trim() || 'deu';
+    base.updatetime        = parseInt(document.getElementById('f_updatetime').value) || 1800;
+    base.append_date       = document.getElementById('f_append_date').checked;
+    base.append_random     = document.getElementById('f_append_random').checked;
+    base.enable_update_flag = document.getElementById('f_enable_update_flag').checked;
+    base.force_ocr         = document.getElementById('f_force_ocr').checked;
+    base.openai_api_key    = document.getElementById('f_openai_api_key').value;
 
-  // On form submit: validate and pretty-format JSON before sending
+    base.ocr_options = base.ocr_options || {};
+    base.ocr_options.ocr_mode    = document.getElementById('f_ocr_mode').value;
+    base.ocr_options.rotate_pages = document.getElementById('f_rotate_pages').checked;
+    base.ocr_options.deskew      = document.getElementById('f_deskew').checked;
+    base.ocr_options.optimize    = parseInt(document.getElementById('f_optimize').value);
+    base.ocr_options.jobs        = parseInt(document.getElementById('f_jobs').value) || 1;
+
+    base.imap = base.imap || {};
+    base.imap.enabled             = document.getElementById('f_imap_enabled').checked;
+    base.imap.host                = document.getElementById('f_imap_host').value.trim();
+    base.imap.port                = parseInt(document.getElementById('f_imap_port').value) || 993;
+    base.imap.ssl                 = document.getElementById('f_imap_ssl').checked;
+    base.imap.username            = document.getElementById('f_imap_username').value;
+    base.imap.password            = document.getElementById('f_imap_password').value;
+    base.imap.folder              = document.getElementById('f_imap_folder').value.trim() || 'INBOX';
+    base.imap.processed_folder   = document.getElementById('f_imap_processed_folder').value.trim();
+    base.imap.delete_after_import = document.getElementById('f_imap_delete_after').checked;
+    base.imap.scan_interval       = parseInt(document.getElementById('f_imap_scan_interval').value) || 300;
+
+    return base;
+  }
+
+  // ── On submit: merge form → JSON → validate → submit ────────────────────────
   document.getElementById("configForm").addEventListener("submit", function(event) {
+    event.preventDefault();
     try {
-      const parsed = JSON.parse(editor.getValue());
-      const pretty = JSON.stringify(parsed, null, 2);
+      const merged = formToConfig();
+      const pretty = JSON.stringify(merged, null, 2);
       editor.setValue(pretty, -1);
-      hiddenInput.value = pretty;
+      document.getElementById('hiddenconfig').value = pretty;
+      this.submit();
     } catch (err) {
-      alert("Invalid JSON! Please fix it before saving.");
-      event.preventDefault(); // Prevent submission if JSON invalid
+      alert("Fehler beim Verarbeiten der Konfiguration: " + err.message);
     }
   });
+
+  // Keep hidden input in sync when JSON editor is changed directly
+  editor.getSession().on("change", function () {
+    document.getElementById('hiddenconfig').value = editor.getValue();
+  });
+
+  // Initialize hidden input value
+  document.getElementById('hiddenconfig').value = editor.getValue();
 </script>
 
 {% endblock content %}

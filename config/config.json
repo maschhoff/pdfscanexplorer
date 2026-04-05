@@ -1,19 +1,31 @@
 {
-  "port": 80,
-  "debug": "on",
-  "lang": "deu",
-  "updatetime": 1800,
-  "append_date": true,
-  "append_random": true,
-  "enable_update_flag": true,
-  "force_ocr": false,
-  "openai_api_key":"",
-  "ocr_options": {
-    "ocr_mode": "skip_text",
-    "rotate_pages": true,
-    "deskew": true,
-    "optimize": 2,
-    "jobs": 3
-  },
-  "index": {}
+    "port": 80,
+    "debug": "on",
+    "lang": "deu",
+    "updatetime": 1800,
+    "append_date": true,
+    "append_random": true,
+    "enable_update_flag": true,
+    "force_ocr": false,
+    "openai_api_key": "",
+    "ocr_options": {
+        "ocr_mode": "skip_text",
+        "rotate_pages": true,
+        "deskew": true,
+        "optimize": 2,
+        "jobs": 3
+    },
+    "imap": {
+        "enabled": false,
+        "host": "",
+        "port": 993,
+        "ssl": true,
+        "username": "",
+        "password": "",
+        "folder": "INBOX",
+        "processed_folder": "Processed",
+        "delete_after_import": false,
+        "scan_interval": 300
+    },
+    "index": {}
 }
