@@ -273,11 +273,15 @@
   let stream = null;
   let facingMode = 'environment';
   let detectionLoop = null;
-  let scannedCanvas = null; // result of extractPaper
+  let scannedCanvas = null;
 
-  const video        = document.getElementById('video');
+  // Reusable canvas for capturing frames (avoids creating one each frame)
+  const tempCanvas = document.createElement('canvas');
+  const tempCtx   = tempCanvas.getContext('2d');
+
+  const video         = document.getElementById('video');
   const overlayCanvas = document.getElementById('overlay-canvas');
-  const overlayCtx   = overlayCanvas.getContext('2d');
+  const overlayCtx    = overlayCanvas.getContext('2d');
   const resultCanvas  = document.getElementById('result-canvas');
   const loadingScreen = document.getElementById('loading-screen');
   const loadingProgress = document.getElementById('loading-progress');
@@ -356,18 +360,71 @@
   }
 
   function detectFrame() {
-    if (video.readyState < 2) { detectionLoop = requestAnimationFrame(detectFrame); return; }
+    if (video.readyState < 2 || !scanner) {
+      detectionLoop = requestAnimationFrame(detectFrame);
+      return;
+    }
 
-    overlayCanvas.width  = video.videoWidth;
-    overlayCanvas.height = video.videoHeight;
+    const vw = video.videoWidth;
+    const vh = video.videoHeight;
+    if (!vw || !vh) { detectionLoop = requestAnimationFrame(detectFrame); return; }
 
+    // Sync canvas dimensions once
+    if (tempCanvas.width !== vw)    { tempCanvas.width = vw;    tempCanvas.height = vh; }
+    if (overlayCanvas.width !== vw) { overlayCanvas.width = vw; overlayCanvas.height = vh; }
+
+    // Capture current video frame into tempCanvas
+    tempCtx.drawImage(video, 0, 0, vw, vh);
+
+    // Always clear overlay first (transparent)
+    overlayCtx.clearRect(0, 0, vw, vh);
+
+    let contour = null;
     try {
-      // highlightPaper draws contour on a canvas and returns it
-      const highlighted = scanner.highlightPaper(video);
-      overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
-      overlayCtx.drawImage(highlighted, 0, 0, overlayCanvas.width, overlayCanvas.height);
+      contour = scanner.getContour(tempCanvas);
+
+      if (contour && contour.data32S && contour.data32S.length >= 8) {
+        const pts = [];
+        for (let i = 0; i + 1 < contour.data32S.length; i += 2) {
+          pts.push({ x: contour.data32S[i], y: contour.data32S[i + 1] });
+        }
+
+        // Ignore if contour spans nearly the whole frame (no document found)
+        const xs = pts.map(p => p.x), ys = pts.map(p => p.y);
+        const w = Math.max(...xs) - Math.min(...xs);
+        const h = Math.max(...ys) - Math.min(...ys);
+        const tooLarge = w > vw * 0.95 && h > vh * 0.95;
+
+        if (!tooLarge) {
+          const lw = Math.max(3, vw / 250);
+          const cr = Math.max(10, vw / 60);
+
+          // Semi-transparent fill
+          overlayCtx.beginPath();
+          overlayCtx.moveTo(pts[0].x, pts[0].y);
+          for (let i = 1; i < pts.length; i++) overlayCtx.lineTo(pts[i].x, pts[i].y);
+          overlayCtx.closePath();
+          overlayCtx.fillStyle = 'rgba(0, 230, 118, 0.15)';
+          overlayCtx.fill();
+
+          // Outline
+          overlayCtx.strokeStyle = '#00e676';
+          overlayCtx.lineWidth = lw;
+          overlayCtx.stroke();
+
+          // Corner dots
+          overlayCtx.fillStyle = '#00e676';
+          pts.forEach(p => {
+            overlayCtx.beginPath();
+            overlayCtx.arc(p.x, p.y, cr, 0, Math.PI * 2);
+            overlayCtx.fill();
+          });
+        }
+      }
     } catch (_) {
-      overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+      // Detection failed – overlay stays clear
+    } finally {
+      if (contour) { try { contour.delete(); } catch(_) {} }
     }
 
     detectionLoop = requestAnimationFrame(detectFrame);
@@ -377,21 +434,22 @@
   document.getElementById('btn-capture').addEventListener('click', () => {
     stopDetectionLoop();
 
-    // Grab current video frame to a temp canvas
-    const tempCanvas = document.createElement('canvas');
-    tempCanvas.width  = video.videoWidth;
-    tempCanvas.height = video.videoHeight;
-    tempCanvas.getContext('2d').drawImage(video, 0, 0);
+    // tempCanvas already holds the last captured frame
+    // Use A4 proportions for the extracted document output (≈ 1240×1754 px)
+    const outW = 1240;
+    const outH = Math.round(outW * Math.SQRT2); // A4 ratio
 
-    // Extract document perspective
     try {
-      scannedCanvas = scanner.extractPaper(tempCanvas, tempCanvas.width, tempCanvas.height);
+      scannedCanvas = scanner.extractPaper(tempCanvas, outW, outH);
     } catch (e) {
       console.warn('extractPaper failed, using raw capture:', e);
-      scannedCanvas = tempCanvas;
+      // Fallback: use tempCanvas as-is
+      scannedCanvas = document.createElement('canvas');
+      scannedCanvas.width  = tempCanvas.width;
+      scannedCanvas.height = tempCanvas.height;
+      scannedCanvas.getContext('2d').drawImage(tempCanvas, 0, 0);
     }
 
-    // Show result screen
     const ctx = resultCanvas.getContext('2d');
     resultCanvas.width  = scannedCanvas.width;
     resultCanvas.height = scannedCanvas.height;
