@@ -192,7 +192,10 @@ def sort(pdf_file, text):
         count = sum(1 for keyword in index[archiv_item] if keyword in text)
 
         if count >= len(index[archiv_item]):
-            full_folder_path = safe_join(work_dir, folder)
+            # folder is already an absolute path (e.g. /Archiv/Rechnungen)
+            # safe_join would strip everything but the last component via basename,
+            # so use the path directly and only sanitize whitespace.
+            full_folder_path = folder.strip()
             os.makedirs(full_folder_path, exist_ok=True)
 
             file_date = date.fromtimestamp(os.path.getmtime(safe_join(pdf_dir, pdf_file))).strftime('%d_%m_%Y')
