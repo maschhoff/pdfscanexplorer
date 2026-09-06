@@ -275,6 +275,31 @@
   let detectionLoop = null;
   let scannedCanvas = null;
 
+  function dist(p1, p2) { return Math.hypot(p1.x - p2.x, p1.y - p2.y); }
+
+  // jscanify's stock getCornerPoints() assigns corners by quadrant relative to
+  // the shape's centroid. That breaks down as soon as the document is rotated
+  // in frame (common on handheld photos) and produces warped/skewed output.
+  // Replace it with the standard rotation-tolerant "sum/diff" corner ordering:
+  // top-left = min(x+y), bottom-right = max(x+y), top-right = min(y-x), bottom-left = max(y-x).
+  jscanify.prototype.getCornerPoints = function (contour) {
+    let minSum = Infinity, maxSum = -Infinity, minDiff = Infinity, maxDiff = -Infinity;
+    let topLeftCorner, bottomRightCorner, topRightCorner, bottomLeftCorner;
+
+    for (let i = 0; i + 1 < contour.data32S.length; i += 2) {
+      const x = contour.data32S[i];
+      const y = contour.data32S[i + 1];
+      const sum  = x + y;
+      const diff = y - x;
+      if (sum  < minSum)  { minSum  = sum;  topLeftCorner     = { x, y }; }
+      if (sum  > maxSum)  { maxSum  = sum;  bottomRightCorner = { x, y }; }
+      if (diff < minDiff) { minDiff = diff; topRightCorner    = { x, y }; }
+      if (diff > maxDiff) { maxDiff = diff; bottomLeftCorner  = { x, y }; }
+    }
+
+    return { topLeftCorner, topRightCorner, bottomLeftCorner, bottomRightCorner };
+  };
+
   // Reusable canvas for capturing frames (avoids creating one each frame)
   const tempCanvas = document.createElement('canvas');
   const tempCtx   = tempCanvas.getContext('2d');
@@ -379,9 +404,11 @@
     // Always clear overlay first (transparent)
     overlayCtx.clearRect(0, 0, vw, vh);
 
+    let imgMat = null;
     let contour = null;
     try {
-      contour = scanner.getContour(tempCanvas);
+      imgMat = cv.imread(tempCanvas);
+      contour = scanner.findPaperContour(imgMat);
 
       if (contour && contour.data32S && contour.data32S.length >= 8) {
         const pts = [];
@@ -425,6 +452,7 @@
       // Detection failed – overlay stays clear
     } finally {
       if (contour) { try { contour.delete(); } catch(_) {} }
+      if (imgMat)  { try { imgMat.delete(); } catch(_) {} }
     }
 
     detectionLoop = requestAnimationFrame(detectFrame);
@@ -434,16 +462,47 @@
   document.getElementById('btn-capture').addEventListener('click', () => {
     stopDetectionLoop();
 
-    // tempCanvas already holds the last captured frame
-    // Use A4 proportions for the extracted document output (≈ 1240×1754 px)
-    const outW = 1240;
-    const outH = Math.round(outW * Math.SQRT2); // A4 ratio
-
+    // tempCanvas already holds the last captured frame.
+    // Detect the document quad ourselves so the extracted output can use its
+    // *actual* proportions (a fixed A4 target would stretch/squash any document
+    // that isn't exactly A4-shaped, and reusing these corners for extractPaper
+    // avoids running detection a second time).
+    scannedCanvas = null;
+    let imgMat = null;
     try {
-      scannedCanvas = scanner.extractPaper(tempCanvas, outW, outH);
+      imgMat = cv.imread(tempCanvas);
+      const contour = scanner.findPaperContour(imgMat);
+      if (contour) {
+        const corners = scanner.getCornerPoints(contour);
+        contour.delete();
+        const { topLeftCorner, topRightCorner, bottomLeftCorner, bottomRightCorner } = corners;
+
+        if (topLeftCorner && topRightCorner && bottomLeftCorner && bottomRightCorner) {
+          const widthTop    = dist(topLeftCorner, topRightCorner);
+          const widthBottom = dist(bottomLeftCorner, bottomRightCorner);
+          const heightLeft  = dist(topLeftCorner, bottomLeftCorner);
+          const heightRight = dist(topRightCorner, bottomRightCorner);
+
+          let outW = Math.max(widthTop, widthBottom);
+          let outH = Math.max(heightLeft, heightRight);
+
+          // Upscale small captures for a crisp, OCR-friendly result (cap the long side).
+          const maxDim = 2200;
+          const scale = Math.min(maxDim / Math.max(outW, outH), 3);
+          outW = Math.max(1, Math.round(outW * scale));
+          outH = Math.max(1, Math.round(outH * scale));
+
+          scannedCanvas = scanner.extractPaper(tempCanvas, outW, outH, corners);
+        }
+      }
     } catch (e) {
       console.warn('extractPaper failed, using raw capture:', e);
-      // Fallback: use tempCanvas as-is
+    } finally {
+      if (imgMat) { try { imgMat.delete(); } catch(_) {} }
+    }
+
+    if (!scannedCanvas) {
+      // Fallback: no document detected / extraction failed – use raw capture
       scannedCanvas = document.createElement('canvas');
       scannedCanvas.width  = tempCanvas.width;
       scannedCanvas.height = tempCanvas.height;

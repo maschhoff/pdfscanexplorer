@@ -28,7 +28,14 @@ def loadConfig():
             "append_random": true,
             "enable_update_flag": true,
             "force_ocr": false,
-            "openai_api_key":"",
+            "ai": {
+                "provider": "openai",
+                "openai": {"api_key": "", "model": "gpt-5"},
+                "gemini": {"api_key": "", "model": "gemini-2.5-flash"},
+                "anthropic": {"api_key": "", "model": "claude-sonnet-4-5"},
+                "deepseek": {"api_key": "", "model": "deepseek-chat"},
+                "ollama": {"host": "http://localhost:11434", "model": "llama3.1"}
+            },
             "imap": {
                 "enabled": false,
                 "host": "",
