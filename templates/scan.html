@@ -260,14 +260,15 @@
 </div>
 
 <!-- ── Libraries ──────────────────────────────────────────────────────────── -->
-<!-- OpenCV.js bundled with jscanify to ensure version compatibility -->
+<!-- OpenCV.js (known-good build, also used previously) -->
 <script async src="https://cdn.jsdelivr.net/npm/jscanify@1.4.2/src/opencv.js"
   onload="onOpenCvReady()" onerror="cvLoadError()"></script>
-<script src="https://cdn.jsdelivr.net/npm/jscanify@1.4.2/src/jscanify.js"></script>
 <!-- jsPDF for PDF generation -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
-<script>
+<script type="module">
+  import { DocumentScanner } from 'https://cdn.jsdelivr.net/npm/opencv-document-scanner@1.2.2/dist/opencv-document-scanner.js';
+
   // ── state ────────────────────────────────────────────────────────────────
   let scanner = null;
   let stream = null;
@@ -277,27 +278,30 @@
 
   function dist(p1, p2) { return Math.hypot(p1.x - p2.x, p1.y - p2.y); }
 
-  // jscanify's stock getCornerPoints() assigns corners by quadrant relative to
-  // the shape's centroid. That breaks down as soon as the document is rotated
-  // in frame (common on handheld photos) and produces warped/skewed output.
-  // Replace it with the standard rotation-tolerant "sum/diff" corner ordering:
-  // top-left = min(x+y), bottom-right = max(x+y), top-right = min(y-x), bottom-left = max(y-x).
-  jscanify.prototype.getCornerPoints = function (contour) {
+  // DocumentScanner's stock getCornerPoints() assigns corners by quadrant
+  // relative to the shape's centroid (same technique as jscanify, which this
+  // page used previously). That breaks down as soon as the document is
+  // rotated in frame (common on handheld photos) and produces warped/skewed
+  // output. Replace it with the standard rotation-tolerant "sum/diff" corner
+  // ordering: top-left = min(x+y), bottom-right = max(x+y),
+  // top-right = min(y-x), bottom-left = max(y-x).
+  // Return order matches the original: [topLeft, topRight, bottomRight, bottomLeft].
+  DocumentScanner.prototype.getCornerPoints = function (contour) {
     let minSum = Infinity, maxSum = -Infinity, minDiff = Infinity, maxDiff = -Infinity;
-    let topLeftCorner, bottomRightCorner, topRightCorner, bottomLeftCorner;
+    let topLeft, topRight, bottomLeft, bottomRight;
 
     for (let i = 0; i + 1 < contour.data32S.length; i += 2) {
       const x = contour.data32S[i];
       const y = contour.data32S[i + 1];
       const sum  = x + y;
       const diff = y - x;
-      if (sum  < minSum)  { minSum  = sum;  topLeftCorner     = { x, y }; }
-      if (sum  > maxSum)  { maxSum  = sum;  bottomRightCorner = { x, y }; }
-      if (diff < minDiff) { minDiff = diff; topRightCorner    = { x, y }; }
-      if (diff > maxDiff) { maxDiff = diff; bottomLeftCorner  = { x, y }; }
+      if (sum  < minSum)  { minSum  = sum;  topLeft     = { x, y }; }
+      if (sum  > maxSum)  { maxSum  = sum;  bottomRight = { x, y }; }
+      if (diff < minDiff) { minDiff = diff; topRight    = { x, y }; }
+      if (diff > maxDiff) { maxDiff = diff; bottomLeft  = { x, y }; }
     }
 
-    return { topLeftCorner, topRightCorner, bottomLeftCorner, bottomRightCorner };
+    return [topLeft, topRight, bottomRight, bottomLeft];
   };
 
   // Reusable canvas for capturing frames (avoids creating one each frame)
@@ -312,21 +316,23 @@
   const loadingProgress = document.getElementById('loading-progress');
 
   // ── OpenCV ready ──────────────────────────────────────────────────────────
-  function onOpenCvReady() {
+  // Exposed on window: referenced from the onload/onerror HTML attributes on
+  // the opencv.js <script> tag, which run in global scope, not module scope.
+  window.onOpenCvReady = function onOpenCvReady() {
     // cv may still be loading – wait for it
     if (typeof cv === 'undefined' || cv.getBuildInformation === undefined) {
       setTimeout(onOpenCvReady, 200);
       return;
     }
-    scanner = new jscanify();
+    scanner = new DocumentScanner();
     loadingScreen.style.display = 'none';
     showScreen('screen-camera');
     startCamera();
-  }
+  };
 
-  function cvLoadError() {
+  window.cvLoadError = function cvLoadError() {
     loadingProgress.textContent = 'Fehler beim Laden der Scan-Engine.';
-  }
+  };
 
   // ── camera ────────────────────────────────────────────────────────────────
   async function startCamera() {
@@ -404,19 +410,11 @@
     // Always clear overlay first (transparent)
     overlayCtx.clearRect(0, 0, vw, vh);
 
-    let imgMat = null;
-    let contour = null;
     try {
-      imgMat = cv.imread(tempCanvas);
-      contour = scanner.findPaperContour(imgMat);
+      const pts = scanner.detect(tempCanvas);
 
-      if (contour && contour.data32S && contour.data32S.length >= 8) {
-        const pts = [];
-        for (let i = 0; i + 1 < contour.data32S.length; i += 2) {
-          pts.push({ x: contour.data32S[i], y: contour.data32S[i + 1] });
-        }
-
-        // Ignore if contour spans nearly the whole frame (no document found)
+      if (pts && pts.length === 4 && pts.every(p => p)) {
+        // Ignore if the quad spans nearly the whole frame (no document found)
         const xs = pts.map(p => p.x), ys = pts.map(p => p.y);
         const w = Math.max(...xs) - Math.min(...xs);
         const h = Math.max(...ys) - Math.min(...ys);
@@ -450,9 +448,6 @@
       }
     } catch (_) {
       // Detection failed – overlay stays clear
-    } finally {
-      if (contour) { try { contour.delete(); } catch(_) {} }
-      if (imgMat)  { try { imgMat.delete(); } catch(_) {} }
     }
 
     detectionLoop = requestAnimationFrame(detectFrame);
@@ -463,42 +458,34 @@
     stopDetectionLoop();
 
     // tempCanvas already holds the last captured frame.
-    // Detect the document quad ourselves so the extracted output can use its
+    // Detect the document quad ourselves so the cropped output can use its
     // *actual* proportions (a fixed A4 target would stretch/squash any document
-    // that isn't exactly A4-shaped, and reusing these corners for extractPaper
-    // avoids running detection a second time).
+    // that isn't exactly A4-shaped), then pass those same corners into crop()
+    // so detection doesn't need to run a second time.
     scannedCanvas = null;
-    let imgMat = null;
     try {
-      imgMat = cv.imread(tempCanvas);
-      const contour = scanner.findPaperContour(imgMat);
-      if (contour) {
-        const corners = scanner.getCornerPoints(contour);
-        contour.delete();
-        const { topLeftCorner, topRightCorner, bottomLeftCorner, bottomRightCorner } = corners;
+      const pts = scanner.detect(tempCanvas);
+      if (pts && pts.length === 4 && pts.every(p => p)) {
+        const [topLeft, topRight, bottomRight, bottomLeft] = pts;
 
-        if (topLeftCorner && topRightCorner && bottomLeftCorner && bottomRightCorner) {
-          const widthTop    = dist(topLeftCorner, topRightCorner);
-          const widthBottom = dist(bottomLeftCorner, bottomRightCorner);
-          const heightLeft  = dist(topLeftCorner, bottomLeftCorner);
-          const heightRight = dist(topRightCorner, bottomRightCorner);
+        const widthTop    = dist(topLeft, topRight);
+        const widthBottom = dist(bottomLeft, bottomRight);
+        const heightLeft  = dist(topLeft, bottomLeft);
+        const heightRight = dist(topRight, bottomRight);
 
-          let outW = Math.max(widthTop, widthBottom);
-          let outH = Math.max(heightLeft, heightRight);
+        let outW = Math.max(widthTop, widthBottom);
+        let outH = Math.max(heightLeft, heightRight);
 
-          // Upscale small captures for a crisp, OCR-friendly result (cap the long side).
-          const maxDim = 2200;
-          const scale = Math.min(maxDim / Math.max(outW, outH), 3);
-          outW = Math.max(1, Math.round(outW * scale));
-          outH = Math.max(1, Math.round(outH * scale));
+        // Upscale small captures for a crisp, OCR-friendly result (cap the long side).
+        const maxDim = 2200;
+        const scale = Math.min(maxDim / Math.max(outW, outH), 3);
+        outW = Math.max(1, Math.round(outW * scale));
+        outH = Math.max(1, Math.round(outH * scale));
 
-          scannedCanvas = scanner.extractPaper(tempCanvas, outW, outH, corners);
-        }
+        scannedCanvas = scanner.crop(tempCanvas, pts, outW, outH);
       }
     } catch (e) {
-      console.warn('extractPaper failed, using raw capture:', e);
-    } finally {
-      if (imgMat) { try { imgMat.delete(); } catch(_) {} }
+      console.warn('crop failed, using raw capture:', e);
     }
 
     if (!scannedCanvas) {

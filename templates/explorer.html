@@ -3,40 +3,42 @@
 <div class="container-fluid">
   <div class="row"><br/></div> <!-- Spacer row -->
   <div class="row">
-    <div class="col">
+    <div class="col-12 col-lg-6 mb-4 mb-lg-0">
 
       <h3><span id="documentCount">{{ liste|length }}</span> Scanned Documents</h3>
 
-      <table id="documentsTable" class="table table-hover" cellspacing="0">
-        <thead>
-          <tr>
-            <th scope="col">Name</th>
-            <th scope="col">Size</th>
-            <th scope="col">Date</th>
-            <th scope="col">View</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for pdf in liste %}
-          <tr>
-            <td>{{ pdf.name }}</td>
-            <td>{{ pdf.size }}</td>
-            <td>{{ pdf.date }}</td>
-            <td>
-              <span class="table-view">
-                <button type="button" id="{{ pdf.name }}" class="btn btn-primary btn-rounded btn-sm px-3" data-toggle="tooltip" data-placement="bottom" title="Document preview">
-                  <i class="fas fa-eye"></i>
-                </button>
-              </span>
-            </td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+      <div class="table-responsive">
+        <table id="documentsTable" class="table table-hover" cellspacing="0">
+          <thead>
+            <tr>
+              <th scope="col">Name</th>
+              <th scope="col">Size</th>
+              <th scope="col">Date</th>
+              <th scope="col">View</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for pdf in liste %}
+            <tr>
+              <td>{{ pdf.name }}</td>
+              <td>{{ pdf.size }}</td>
+              <td>{{ pdf.date }}</td>
+              <td>
+                <span class="table-view">
+                  <button type="button" id="{{ pdf.name }}" class="btn btn-primary btn-rounded btn-sm px-3" data-toggle="tooltip" data-placement="bottom" title="Document preview">
+                    <i class="fas fa-eye"></i>
+                  </button>
+                </span>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
 
     </div>
 
-    <div class="col" id="pdfPreviewSection">
+    <div class="col-12 col-lg-6" id="pdfPreviewSection">
 
       <form action="/" name="editForm" onsubmit="return validateFileName()" method="POST">
         <h3>Edit and Move</h3>
@@ -84,22 +86,24 @@
       <hr>
 
       <!-- Action buttons -->
-      <button type="submit" class="btn btn-primary btn-sm" id="btnNext" data-toggle="tooltip" data-placement="bottom" title="Preview next document">
-        <i class="fas fa-angle-double-right"></i>
-      </button>
-      <button type="submit" class="btn btn-primary btn-sm" id="btnMagic" data-toggle="tooltip" data-placement="bottom" title="OCR-Scan and set keywords for autoscan">
-        <i class="fas fa-magic"></i>
-      </button>
-    
-      <button type="submit" class="btn btn-primary btn-sm" id="btnRotate" data-toggle="tooltip" data-placement="bottom" title="Rotate document 180">
-        <i class="fas fa-redo"></i>
-      </button>
-      <button type="submit" class="btn btn-primary btn-sm" id="btnDownload" data-toggle="tooltip" data-placement="bottom" title="Download document">
-        <i class="fas fa-download"></i>
-      </button>
-      <button type="button" class="btn btn-primary btn-sm" id="btnDelete" data-toggle="modal" data-target="#deleteModal" data-placement="bottom" title="Delete this document">
-        <i class="fas fa-trash"></i>
-      </button>
+      <div class="d-flex flex-wrap">
+        <button type="submit" class="btn btn-primary btn-sm" id="btnNext" data-toggle="tooltip" data-placement="bottom" title="Preview next document">
+          <i class="fas fa-angle-double-right"></i>
+        </button>
+        <button type="submit" class="btn btn-primary btn-sm" id="btnMagic" data-toggle="tooltip" data-placement="bottom" title="OCR-Scan and set keywords for autoscan">
+          <i class="fas fa-magic"></i>
+        </button>
+
+        <button type="submit" class="btn btn-primary btn-sm" id="btnRotate" data-toggle="tooltip" data-placement="bottom" title="Rotate document 180">
+          <i class="fas fa-redo"></i>
+        </button>
+        <button type="submit" class="btn btn-primary btn-sm" id="btnDownload" data-toggle="tooltip" data-placement="bottom" title="Download document">
+          <i class="fas fa-download"></i>
+        </button>
+        <button type="button" class="btn btn-primary btn-sm" id="btnDelete" data-toggle="modal" data-target="#deleteModal" data-placement="bottom" title="Delete this document">
+          <i class="fas fa-trash"></i>
+        </button>
+      </div>
 
       <!-- PDF viewer iframe -->
       <iframe
@@ -108,7 +112,7 @@
         width="100%"
         height="800px"
         frameborder="0"
-        style="border: none;">
+        style="border: none; max-width: 100%;">
       </iframe>
 
     </div>
@@ -239,9 +243,13 @@
     const initialSortDir = "{{ sort_direction|default('desc') }}";
     let currentSort = { col: initialSortCol, dir: initialSortDir };
 
+    // Stacked mobile layout has less room above the table (list + preview
+    // are on top of each other), so give it a shorter scroll area there.
+    const isNarrowScreen = window.matchMedia('(max-width: 991.98px)').matches;
+
     const $table = $('#documentsTable');
     const dataTable = $table.DataTable({
-      scrollY: "calc(100vh - 222px)",
+      scrollY: isNarrowScreen ? "45vh" : "calc(100vh - 222px)",
       scrollCollapse: true,
       paging: false,
       info: false,

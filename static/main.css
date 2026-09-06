@@ -4,6 +4,14 @@ body {
   overflow: hidden; /* Verhindert Scrollbars */
 }
 
+/* On narrow screens the list/preview columns stack instead of sitting
+   side by side, so the page needs to scroll vertically to reach both. */
+@media (max-width: 991.98px) {
+  body {
+    overflow-y: auto;
+  }
+}
+
 header {
   margin-bottom: 2rem;
 }
@@ -72,6 +80,15 @@ table.dataTable thead td {
 #pdfEmbed {
   height: calc(100vh - 320px);
   border-bottom: none;
+}
+
+/* Stacked mobile layout: the preview sits below the list rather than
+   beside it, so size it relative to the screen instead of the desktop calc. */
+@media (max-width: 991.98px) {
+  #pdfViewerFrame,
+  #pdfEmbed {
+    height: 70vh;
+  }
 }
 
 #pdfViewerFrameMagic {

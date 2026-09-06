@@ -45,9 +45,21 @@
     <nav class="navbar navbar-expand-lg navbar-light bg-light text-dark">
       <div class="container-fluid px-0">
 
+        <!-- Brand and primary quick actions: always visible, never hidden behind the hamburger -->
+        <a class="navbar-brand" href="/">
+          <i class="fas fa-file-pdf"></i>
+          PDF Scan Explorer
+        </a>
+        <button type="button" class="btn btn-primary btn-sm mr-1" id="btnUpload" data-toggle="modal" data-target="#uploadModal" data-placement="bottom" title="Upload a document">
+          <i class="fas fa-plus"></i>
+        </button>
+        <a href="/scan" class="btn btn-primary btn-sm" id="btnScan" data-toggle="tooltip" data-placement="bottom" title="Scan document with camera">
+          <i class="fas fa-camera"></i>
+        </a>
+
         <!-- Hamburger menu for small screens -->
         <button
-          class="navbar-toggler"
+          class="navbar-toggler ml-auto"
           type="button"
           data-mdb-toggle="collapse"
           data-mdb-target="#navbarSupportedContent"
@@ -58,64 +70,55 @@
           <i class="fas fa-bars"></i>
         </button>
 
-        <!-- Navbar brand and title -->
-        <div class="collapse navbar-collapse" id="navbarSupportedContent">
-          <a class="navbar-brand" href="/">
-            <i class="fas fa-file-pdf"></i> 
-            PDF Scan Explorer
-          </a>
-           <button type="button" class="btn btn-primary btn-sm" id="btnUpload" data-toggle="modal" data-target="#uploadModal" data-placement="bottom" title="Upload a document">
-            <i class="fas fa-plus"></i>
-           </button>
-        </div>
-
         <!-- Placeholder for dynamic messages -->
         {{ message }}
 
-        <!-- Right side navigation icons -->
-        <ul class="navbar-nav nav-flex-icons">
-          <li class="nav-item">
-            <a
-              class="nav-link"
-              href="/autoscan"
-              id="button_autoscan"
-              data-toggle="tooltip"
-              data-placement="bottom"
-              title="Renew / Import new scans"
-              ><i class="fas fa-sync"></i
-            ></a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="/imap_scan" id="button_imap" data-toggle="tooltip" data-placement="bottom" title="Scan IMAP mailbox for PDF attachments">
-              <i class="fas fa-envelope-open-text"></i>
-            </a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="/fileexplorer" data-toggle="tooltip" data-placement="bottom" title="Browse archive">
-              <i class="fas fa-archive"></i>
-            </a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="/merge" data-toggle="tooltip" data-placement="bottom" title="Merge files">
-              <i class="fas fa-caret-square-down"></i>
-            </a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="/split" data-toggle="tooltip" data-placement="bottom" title="Split document">
-              <i class="fas fa-cut"></i>
-            </a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="/settings" data-toggle="tooltip" data-placement="bottom" title="Settings">
-              <i class="fas fa-cog"></i>
-            </a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="https://github.com/maschhoff/prpdf/" target="_blank" rel="noopener noreferrer">
-              <i class="fab fa-github"></i>
-            </a>
-          </li>
-        </ul>
+        <!-- Right side navigation icons: tucked behind the hamburger on small screens -->
+        <div class="collapse navbar-collapse flex-grow-0" id="navbarSupportedContent">
+          <ul class="navbar-nav nav-flex-icons ml-lg-auto">
+            <li class="nav-item">
+              <a
+                class="nav-link"
+                href="/autoscan"
+                id="button_autoscan"
+                data-toggle="tooltip"
+                data-placement="bottom"
+                title="Renew / Import new scans"
+                ><i class="fas fa-sync"></i
+              ></a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="/imap_scan" id="button_imap" data-toggle="tooltip" data-placement="bottom" title="Scan IMAP mailbox for PDF attachments">
+                <i class="fas fa-envelope-open-text"></i>
+              </a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="/fileexplorer" data-toggle="tooltip" data-placement="bottom" title="Browse archive">
+                <i class="fas fa-archive"></i>
+              </a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="/merge" data-toggle="tooltip" data-placement="bottom" title="Merge files">
+                <i class="fas fa-caret-square-down"></i>
+              </a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="/split" data-toggle="tooltip" data-placement="bottom" title="Split document">
+                <i class="fas fa-cut"></i>
+              </a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="/settings" data-toggle="tooltip" data-placement="bottom" title="Settings">
+                <i class="fas fa-cog"></i>
+              </a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="https://github.com/maschhoff/prpdf/" target="_blank" rel="noopener noreferrer">
+                <i class="fab fa-github"></i>
+              </a>
+            </li>
+          </ul>
+        </div>
 
       </div>
     </nav>
