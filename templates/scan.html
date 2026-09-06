@@ -63,11 +63,6 @@
       object-fit: cover;
       display: block;
     }
-    #overlay-canvas {
-      position: absolute; top: 0; left: 0;
-      width: 100%; height: 100%;
-      pointer-events: none;
-    }
     .corner-guide {
       position: absolute;
       top: 50%; left: 50%;
@@ -95,6 +90,7 @@
       color: rgba(255,255,255,0.7);
       font-size: 0.85rem;
       text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+      pointer-events: none;
     }
 
     /* ── capture bar ── */
@@ -123,6 +119,28 @@
       color: var(--text); width: 48px; height: 48px;
       display: flex; align-items: center; justify-content: center;
       font-size: 1.3rem; cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    /* ── adjust (corner-edit) screen ── */
+    #adjust-wrap {
+      position: relative;
+      flex: 1;
+      overflow: hidden;
+      background: #000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    #adjust-canvas-holder {
+      position: relative;
+      line-height: 0;
+    }
+    #adjust-canvas { display: block; }
+    #adjust-overlay {
+      position: absolute;
+      top: 0; left: 0;
+      touch-action: none;
       -webkit-tap-highlight-color: transparent;
     }
 
@@ -218,7 +236,6 @@
 
   <div id="viewfinder-wrap">
     <video id="video" playsinline autoplay muted></video>
-    <canvas id="overlay-canvas"></canvas>
     <div class="corner-guide"><span></span></div>
     <p class="hint-text">Dokument im Rahmen positionieren</p>
   </div>
@@ -227,6 +244,29 @@
     <div style="width:48px;"></div>
     <button class="shutter" id="btn-capture" title="Foto aufnehmen"></button>
     <div style="width:48px;"></div>
+  </div>
+</div>
+
+<!-- ══ ADJUST SCREEN (Ecken anpassen) ═══════════════════════════════════════════ -->
+<div class="screen" id="screen-adjust">
+  <div class="topbar">
+    <button class="icon-btn" id="btn-adjust-back" title="Zurück zur Kamera">←</button>
+    <h1>Ecken anpassen</h1>
+    <span style="width:32px;"></span>
+  </div>
+
+  <div id="adjust-wrap">
+    <div id="adjust-canvas-holder">
+      <canvas id="adjust-canvas"></canvas>
+      <canvas id="adjust-overlay"></canvas>
+    </div>
+    <p class="hint-text">Ecken an die Dokumentkanten ziehen</p>
+  </div>
+
+  <div class="capture-bar">
+    <button class="btn btn-primary" id="btn-adjust-confirm" style="width:auto; padding: 14px 40px;">
+      ✓ Übernehmen
+    </button>
   </div>
 </div>
 
@@ -273,19 +313,29 @@
   let scanner = null;
   let stream = null;
   let facingMode = 'environment';
-  let detectionLoop = null;
   let scannedCanvas = null;
+
+  // Full-res still frame grabbed on shutter press, and the quad the user
+  // adjusts on top of it (order: [topLeft, topRight, bottomRight, bottomLeft],
+  // in captureCanvas pixel coordinates).
+  let captureCanvas = null;
+  let adjustQuad = null;
+  let adjustScale = 1;
+  let draggingIndex = null;
 
   function dist(p1, p2) { return Math.hypot(p1.x - p2.x, p1.y - p2.y); }
 
   // DocumentScanner's stock getCornerPoints() assigns corners by quadrant
   // relative to the shape's centroid (same technique as jscanify, which this
   // page used previously). That breaks down as soon as the document is
-  // rotated in frame (common on handheld photos) and produces warped/skewed
-  // output. Replace it with the standard rotation-tolerant "sum/diff" corner
+  // rotated in frame (common on handheld photos) and produces a bad initial
+  // guess. Replace it with the standard rotation-tolerant "sum/diff" corner
   // ordering: top-left = min(x+y), bottom-right = max(x+y),
   // top-right = min(y-x), bottom-left = max(y-x).
   // Return order matches the original: [topLeft, topRight, bottomRight, bottomLeft].
+  // This only seeds the corner-adjust screen now (see below) — the user drags
+  // the handles to the true edges before anything gets cropped, so a decent
+  // starting guess is all this needs to provide.
   DocumentScanner.prototype.getCornerPoints = function (contour) {
     let minSum = Infinity, maxSum = -Infinity, minDiff = Infinity, maxDiff = -Infinity;
     let topLeft, topRight, bottomLeft, bottomRight;
@@ -304,16 +354,17 @@
     return [topLeft, topRight, bottomRight, bottomLeft];
   };
 
-  // Reusable canvas for capturing frames (avoids creating one each frame)
-  const tempCanvas = document.createElement('canvas');
-  const tempCtx   = tempCanvas.getContext('2d');
-
   const video         = document.getElementById('video');
-  const overlayCanvas = document.getElementById('overlay-canvas');
-  const overlayCtx    = overlayCanvas.getContext('2d');
   const resultCanvas  = document.getElementById('result-canvas');
   const loadingScreen = document.getElementById('loading-screen');
   const loadingProgress = document.getElementById('loading-progress');
+
+  const adjustWrap       = document.getElementById('adjust-wrap');
+  const adjustHolder      = document.getElementById('adjust-canvas-holder');
+  const adjustCanvas      = document.getElementById('adjust-canvas');
+  const adjustCtx         = adjustCanvas.getContext('2d');
+  const adjustOverlay     = document.getElementById('adjust-overlay');
+  const adjustOverlayCtx  = adjustOverlay.getContext('2d');
 
   // ── OpenCV ready ──────────────────────────────────────────────────────────
   // Exposed on window: referenced from the onload/onerror HTML attributes on
@@ -355,7 +406,6 @@
       });
       video.srcObject = stream;
       video.play();
-      video.addEventListener('loadedmetadata', startDetectionLoop, { once: true });
     } catch (e) {
       let hint = '';
       if (e.name === 'NotAllowedError') hint = 'Kameraberechtigung wurde verweigert. Bitte in den Browser-Einstellungen erlauben.';
@@ -376,124 +426,166 @@
 
   document.getElementById('btn-flip-camera').addEventListener('click', () => {
     facingMode = facingMode === 'environment' ? 'user' : 'environment';
-    stopDetectionLoop();
     startCamera();
   });
 
-  // ── document detection overlay ───────────────────────────────────────────
-  function startDetectionLoop() {
-    stopDetectionLoop();
-    detectionLoop = requestAnimationFrame(detectFrame);
-  }
+  // ── capture ───────────────────────────────────────────────────────────────
+  // Capture is manual-only, like a normal camera shutter: no live "is this a
+  // document" detection loop. Automatic per-frame edge detection turned out
+  // unreliable in practice (varies with lighting/background/rotation), so
+  // detection now runs once on the captured still as a starting guess, and
+  // the user confirms or drags the corners to the real edges on the next
+  // screen before anything gets warped.
+  document.getElementById('btn-capture').addEventListener('click', () => {
+    const vw = video.videoWidth, vh = video.videoHeight;
+    if (!vw || !vh) return;
 
-  function stopDetectionLoop() {
-    if (detectionLoop) { cancelAnimationFrame(detectionLoop); detectionLoop = null; }
-  }
+    captureCanvas = document.createElement('canvas');
+    captureCanvas.width = vw;
+    captureCanvas.height = vh;
+    captureCanvas.getContext('2d').drawImage(video, 0, 0, vw, vh);
 
-  function detectFrame() {
-    if (video.readyState < 2 || !scanner) {
-      detectionLoop = requestAnimationFrame(detectFrame);
-      return;
-    }
-
-    const vw = video.videoWidth;
-    const vh = video.videoHeight;
-    if (!vw || !vh) { detectionLoop = requestAnimationFrame(detectFrame); return; }
-
-    // Sync canvas dimensions once
-    if (tempCanvas.width !== vw)    { tempCanvas.width = vw;    tempCanvas.height = vh; }
-    if (overlayCanvas.width !== vw) { overlayCanvas.width = vw; overlayCanvas.height = vh; }
-
-    // Capture current video frame into tempCanvas
-    tempCtx.drawImage(video, 0, 0, vw, vh);
-
-    // Always clear overlay first (transparent)
-    overlayCtx.clearRect(0, 0, vw, vh);
-
+    let pts = null;
     try {
-      const pts = scanner.detect(tempCanvas);
-
-      if (pts && pts.length === 4 && pts.every(p => p)) {
-        // Ignore if the quad spans nearly the whole frame (no document found)
-        const xs = pts.map(p => p.x), ys = pts.map(p => p.y);
-        const w = Math.max(...xs) - Math.min(...xs);
-        const h = Math.max(...ys) - Math.min(...ys);
-        const tooLarge = w > vw * 0.95 && h > vh * 0.95;
-
-        if (!tooLarge) {
-          const lw = Math.max(3, vw / 250);
-          const cr = Math.max(10, vw / 60);
-
-          // Semi-transparent fill
-          overlayCtx.beginPath();
-          overlayCtx.moveTo(pts[0].x, pts[0].y);
-          for (let i = 1; i < pts.length; i++) overlayCtx.lineTo(pts[i].x, pts[i].y);
-          overlayCtx.closePath();
-          overlayCtx.fillStyle = 'rgba(0, 230, 118, 0.15)';
-          overlayCtx.fill();
-
-          // Outline
-          overlayCtx.strokeStyle = '#00e676';
-          overlayCtx.lineWidth = lw;
-          overlayCtx.stroke();
-
-          // Corner dots
-          overlayCtx.fillStyle = '#00e676';
-          pts.forEach(p => {
-            overlayCtx.beginPath();
-            overlayCtx.arc(p.x, p.y, cr, 0, Math.PI * 2);
-            overlayCtx.fill();
-          });
-        }
+      const detected = scanner.detect(captureCanvas);
+      if (detected && detected.length === 4 && detected.every(p => p)) {
+        pts = detected;
       }
     } catch (_) {
-      // Detection failed – overlay stays clear
+      // Fall through to the default inset quad below.
     }
 
-    detectionLoop = requestAnimationFrame(detectFrame);
+    if (!pts) {
+      // No reliable detection – default to a quad inset from the frame edges
+      // so there's always something sensible to start dragging from.
+      const mx = vw * 0.08, my = vh * 0.08;
+      pts = [
+        { x: mx, y: my }, { x: vw - mx, y: my },
+        { x: vw - mx, y: vh - my }, { x: mx, y: vh - my }
+      ];
+    }
+
+    adjustQuad = pts;
+    openAdjustScreen();
+  });
+
+  // ── adjust screen: corner drag editor ────────────────────────────────────
+  function openAdjustScreen() {
+    showScreen('screen-adjust');
+    // Wait a frame so #adjust-wrap has its final layout size before we measure it.
+    requestAnimationFrame(() => {
+      const maxW = Math.max(50, adjustWrap.clientWidth - 32);
+      const maxH = Math.max(50, adjustWrap.clientHeight - 32);
+      adjustScale = Math.min(maxW / captureCanvas.width, maxH / captureCanvas.height, 1);
+
+      const displayW = Math.max(1, Math.round(captureCanvas.width * adjustScale));
+      const displayH = Math.max(1, Math.round(captureCanvas.height * adjustScale));
+
+      [adjustCanvas, adjustOverlay].forEach(c => { c.width = displayW; c.height = displayH; });
+      adjustHolder.style.width  = displayW + 'px';
+      adjustHolder.style.height = displayH + 'px';
+
+      adjustCtx.drawImage(captureCanvas, 0, 0, displayW, displayH);
+      drawAdjustOverlay();
+    });
   }
 
-  // ── capture ───────────────────────────────────────────────────────────────
-  document.getElementById('btn-capture').addEventListener('click', () => {
-    stopDetectionLoop();
+  function toDisplay(p) { return { x: p.x * adjustScale, y: p.y * adjustScale }; }
+  function toFullRes(p)  { return { x: p.x / adjustScale, y: p.y / adjustScale }; }
 
-    // tempCanvas already holds the last captured frame.
-    // Detect the document quad ourselves so the cropped output can use its
-    // *actual* proportions (a fixed A4 target would stretch/squash any document
-    // that isn't exactly A4-shaped), then pass those same corners into crop()
-    // so detection doesn't need to run a second time.
+  function drawAdjustOverlay() {
+    const w = adjustOverlay.width, h = adjustOverlay.height;
+    adjustOverlayCtx.clearRect(0, 0, w, h);
+    const pts = adjustQuad.map(toDisplay);
+
+    adjustOverlayCtx.beginPath();
+    adjustOverlayCtx.moveTo(pts[0].x, pts[0].y);
+    for (let i = 1; i < pts.length; i++) adjustOverlayCtx.lineTo(pts[i].x, pts[i].y);
+    adjustOverlayCtx.closePath();
+    adjustOverlayCtx.fillStyle = 'rgba(33, 150, 243, 0.15)';
+    adjustOverlayCtx.fill();
+    adjustOverlayCtx.strokeStyle = '#2196F3';
+    adjustOverlayCtx.lineWidth = 2;
+    adjustOverlayCtx.stroke();
+
+    pts.forEach(p => {
+      adjustOverlayCtx.beginPath();
+      adjustOverlayCtx.arc(p.x, p.y, 14, 0, Math.PI * 2);
+      adjustOverlayCtx.fillStyle = '#fff';
+      adjustOverlayCtx.fill();
+      adjustOverlayCtx.lineWidth = 3;
+      adjustOverlayCtx.strokeStyle = '#2196F3';
+      adjustOverlayCtx.stroke();
+    });
+  }
+
+  const HANDLE_HIT_RADIUS = 28;
+
+  function overlayPointFromEvent(e) {
+    const rect = adjustOverlay.getBoundingClientRect();
+    return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+  }
+
+  adjustOverlay.addEventListener('pointerdown', (e) => {
+    const p = overlayPointFromEvent(e);
+    const displayPts = adjustQuad.map(toDisplay);
+    let best = -1, bestDist = HANDLE_HIT_RADIUS;
+    displayPts.forEach((dp, i) => {
+      const d = Math.hypot(dp.x - p.x, dp.y - p.y);
+      if (d <= bestDist) { bestDist = d; best = i; }
+    });
+    if (best >= 0) {
+      draggingIndex = best;
+      adjustOverlay.setPointerCapture(e.pointerId);
+    }
+  });
+
+  adjustOverlay.addEventListener('pointermove', (e) => {
+    if (draggingIndex === null) return;
+    const p = overlayPointFromEvent(e);
+    const clamped = {
+      x: Math.min(Math.max(p.x, 0), adjustOverlay.width),
+      y: Math.min(Math.max(p.y, 0), adjustOverlay.height)
+    };
+    adjustQuad[draggingIndex] = toFullRes(clamped);
+    drawAdjustOverlay();
+  });
+
+  function endDrag() { draggingIndex = null; }
+  adjustOverlay.addEventListener('pointerup', endDrag);
+  adjustOverlay.addEventListener('pointercancel', endDrag);
+
+  document.getElementById('btn-adjust-back').addEventListener('click', () => {
+    showScreen('screen-camera');
+  });
+
+  document.getElementById('btn-adjust-confirm').addEventListener('click', () => {
     scannedCanvas = null;
     try {
-      const pts = scanner.detect(tempCanvas);
-      if (pts && pts.length === 4 && pts.every(p => p)) {
-        const [topLeft, topRight, bottomRight, bottomLeft] = pts;
+      const [topLeft, topRight, bottomRight, bottomLeft] = adjustQuad;
 
-        const widthTop    = dist(topLeft, topRight);
-        const widthBottom = dist(bottomLeft, bottomRight);
-        const heightLeft  = dist(topLeft, bottomLeft);
-        const heightRight = dist(topRight, bottomRight);
+      const widthTop    = dist(topLeft, topRight);
+      const widthBottom = dist(bottomLeft, bottomRight);
+      const heightLeft  = dist(topLeft, bottomLeft);
+      const heightRight = dist(topRight, bottomRight);
 
-        let outW = Math.max(widthTop, widthBottom);
-        let outH = Math.max(heightLeft, heightRight);
+      let outW = Math.max(widthTop, widthBottom);
+      let outH = Math.max(heightLeft, heightRight);
 
-        // Upscale small captures for a crisp, OCR-friendly result (cap the long side).
-        const maxDim = 2200;
-        const scale = Math.min(maxDim / Math.max(outW, outH), 3);
-        outW = Math.max(1, Math.round(outW * scale));
-        outH = Math.max(1, Math.round(outH * scale));
+      // Upscale small captures for a crisp, OCR-friendly result (cap the long side).
+      const maxDim = 2200;
+      const scale = Math.min(maxDim / Math.max(outW, outH), 3);
+      outW = Math.max(1, Math.round(outW * scale));
+      outH = Math.max(1, Math.round(outH * scale));
 
-        scannedCanvas = scanner.crop(tempCanvas, pts, outW, outH);
-      }
+      scannedCanvas = scanner.crop(captureCanvas, adjustQuad, outW, outH);
     } catch (e) {
       console.warn('crop failed, using raw capture:', e);
     }
 
     if (!scannedCanvas) {
-      // Fallback: no document detected / extraction failed – use raw capture
-      scannedCanvas = document.createElement('canvas');
-      scannedCanvas.width  = tempCanvas.width;
-      scannedCanvas.height = tempCanvas.height;
-      scannedCanvas.getContext('2d').drawImage(tempCanvas, 0, 0);
+      // Fallback: warp failed for some reason – use the uncropped photo.
+      scannedCanvas = captureCanvas;
     }
 
     const ctx = resultCanvas.getContext('2d');
@@ -505,13 +597,8 @@
   });
 
   // ── result navigation ─────────────────────────────────────────────────────
-  document.getElementById('btn-back').addEventListener('click', goBackToCamera);
-  document.getElementById('btn-rescan').addEventListener('click', goBackToCamera);
-
-  function goBackToCamera() {
-    showScreen('screen-camera');
-    startDetectionLoop();
-  }
+  document.getElementById('btn-back').addEventListener('click', () => showScreen('screen-camera'));
+  document.getElementById('btn-rescan').addEventListener('click', () => showScreen('screen-camera'));
 
   // ── PDF generation & upload ───────────────────────────────────────────────
   document.getElementById('btn-upload').addEventListener('click', async () => {
@@ -532,7 +619,7 @@
         showUploadOverlay('success', '✅ Erfolgreich hochgeladen!');
         setTimeout(() => {
           hideUploadOverlay();
-          goBackToCamera();
+          showScreen('screen-camera');
         }, 2000);
       } else {
         showUploadOverlay('error', '❌ Fehler: ' + (data.error || 'Unbekannt'));
